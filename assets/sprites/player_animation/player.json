@@ -1,0 +1,58 @@
+{
+    "project_name": "player",
+    "spritesheet_path": "walking-P1.png",
+    "character_name": "you",
+    "animations": {
+        "idle":[
+            {
+                "x": 0,
+                "y": 100,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_0",
+                "description": "Sugerido",
+                "animation": "quieto"
+            }
+        ],
+        "walk-right": [
+            {
+                "x": 44,
+                "y": 0,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_1",
+                "description": "Sugerido",
+                "animation": "derecha"
+            },
+            {
+                "x": 88,
+                "y": 0,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_2",
+                "description": "Sugerido",
+                "animation": "derecha"
+            }
+        ],
+        "walk-left": [
+            {
+                "x": 44,
+                "y": 100,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            },
+            {
+                "x": 88,
+                "y": 100,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            }
+        ]
+    }
+}
