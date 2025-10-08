@@ -19,7 +19,15 @@ class Player(GameObject):
         #self.rect = pygame.Rect(x, y, ancho, alto)
         #self.color = color
         self.velocidad = 8
-        
+
+        #Definir animación inicial según el jugador
+        if self.is_player2:
+            self.current_animation = "idle-P2"
+        else:
+            self.current_animation = "idle"
+
+        #Inicializar frame correctamente
+        self.frame_index = 0
 
     def mover(self, teclas):
         moved = False
@@ -38,12 +46,18 @@ class Player(GameObject):
 
         if izquierda:
             self.world_x -= self.velocidad
-            self.current_animation = "walk-left"
+            if self.is_player2:
+                self.current_animation = "walk-left-P2"
+            else:
+                self.current_animation = "walk-left"
             moved = True
 
         if derecha:
             self.world_x += self.velocidad
-            self.current_animation = "walk-right"
+            if self.is_player2:
+                self.current_animation = "walk-right-P2"
+            else:
+                self.current_animation = "walk-right"
             moved = True
 
         if arriba:

@@ -45,6 +45,6 @@ class Game:
             
             #self.jugador.draw(self.PANTALLA)
             self.field.draw(self.PANTALLA)
-            self.jugador1.draw(self.PANTALLA)
             self.jugador2.draw(self.PANTALLA)
+            self.jugador1.draw(self.PANTALLA)
             pygame.display.flip()
