@@ -1,6 +1,6 @@
 {
     "project_name": "player",
-    "spritesheet_path": "walking-P1.png",
+    "spritesheet_path": "Players.png",
     "character_name": "you",
     "animations": {
         "idle":[
@@ -52,6 +52,57 @@
                 "name": "sprite_5",
                 "description": "Sugerido",
                 "animation": "izquierda"
+            }
+        ],
+        "walk-left-P2": [
+            {
+                "x": 176,
+                "y": 0,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            },
+            {
+                "x": 220,
+                "y": 0,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            }
+        ],
+        "idle-P2": [
+            {
+                "x": 176,
+                "y": 0,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            }
+        ],
+        "walk-right-P2": [
+            {
+                "x": 264,
+                "y": 0,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "derecha2"
+            },
+            {
+                "x": 308,
+                "y": 0,
+                "width": 44,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "derecha2"
             }
         ]
     }
