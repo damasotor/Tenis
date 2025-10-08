@@ -84,8 +84,8 @@ class Field:
         """
         
         if self.texture:
-            # Elegí el factor de reducción
-            scale_factor = 0.8  # 90% del tamaño original (probá 0.8, 0.7, etc.)
+            #Escala de la cancha
+            scale_factor = 0.8
 
             w, h = self.texture.get_size()
             new_size = (int(w * scale_factor), int(h * scale_factor))
