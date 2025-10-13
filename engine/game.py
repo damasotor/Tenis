@@ -4,7 +4,7 @@ import pygame
 
 from engine.player import Player
 from engine.field import Field
-from engine.utils.colors import ROJO, AZUL, AZUL_OSCURO, BLANCO
+from engine.utils.colors import AZUL_OSCURO, BLANCO
 from engine.utils.screen import ANCHO, ALTO
 from engine.audio import AudioManager  # audio central
 from engine.ball import Ball           # pelota
@@ -31,6 +31,12 @@ class Game:
         # Config persistente de audio
         self.config_path = os.path.join("assets", "audio_config.json")
         self._load_audio_config()
+
+        # Flags de desarrollo / ambiente
+        # self.debug_audio → activa hotkeys de test (v, b, n, f, etc.)
+        # self.use_crowd_ambience → True = crowd_loop.wav | False = ingame_music.wav (si existe)
+        self.debug_audio = os.getenv("VJ2D_DEBUG_AUDIO", "1") == "1"
+        self.use_crowd_ambience = False # cambiar a True para probar con crowd_loop.wav
 
         # Música por estado → arrancamos en MENÚ
         self._set_music_state("menu")
@@ -145,17 +151,35 @@ class Game:
             print(f"[Audio] No se pudo guardar config: {e}")
 
     # ---------------------------
-    # Música por estado
+    # Música por estado (con switch de ambiente)
     # ---------------------------
     def _set_music_state(self, state: str):
+        def ap(*parts):
+            return os.path.join("assets", "audio", *parts)
+
         if state == "menu":
             self.audio.fadeout_music(200)
-            self.audio.load_music(os.path.join("assets","audio","menu_music.wav"))
-            self.audio.play_music(loops=-1, volume=0.40)
-        elif state == "ingame":
+            path = ap("menu_music.wav")
+            if os.path.exists(path):
+                self.audio.load_music(path)
+                self.audio.play_music(loops=-1, volume=0.40)
+            return
+
+        if state == "ingame":
             self.audio.fadeout_music(200)
-            self.audio.load_music(os.path.join("assets","audio","crowd_loop.wav"))
-            self.audio.play_music(loops=-1, volume=0.20)
+            # crowd vs instrumental
+            if self.use_crowd_ambience and os.path.exists(ap("crowd_loop.wav")):
+                music_path = ap("crowd_loop.wav")
+                vol = 0.20
+            elif os.path.exists(ap("ingame_music.wav")):
+                music_path = ap("ingame_music.wav")
+                vol = 0.35
+            else:
+                # Última red de seguridad: silencio si no hay assets
+                return
+
+            self.audio.load_music(music_path)
+            self.audio.play_music(loops=-1, volume=vol)
 
     # ---------------------------
     # Bucle principal
@@ -228,41 +252,42 @@ class Game:
                             self.estado_juego = 'pausa'
                             self.audio.duck_music(0.08)
 
-                        # Hotkeys de prueba (sonoros)
-                        if evento.key == pygame.K_v:
-                            self.audio.play_sound("serve")
-                        if evento.key == pygame.K_h:
-                            for b in self.balls:
-                                b.on_racket_hit()
-                                break
-                        if evento.key == pygame.K_b:
-                            self.audio.play_sound("bounce_court")
-                        if evento.key == pygame.K_n:
-                            self.audio.play_sound("net_touch")
-                            if "crowd_ooh" in self.audio.sounds:
+                        # Hotkeys de prueba (envueltos bajo debug_audio)
+                        if self.debug_audio:
+                            if evento.key == pygame.K_v:
+                                self.audio.play_sound("serve")
+                            if evento.key == pygame.K_h:
+                                for b in self.balls:
+                                    b.on_racket_hit()
+                                    break
+                            if evento.key == pygame.K_b:
+                                self.audio.play_sound("bounce_court")
+                            if evento.key == pygame.K_n:
+                                self.audio.play_sound("net_touch")
+                                if "crowd_ooh" in self.audio.sounds:
+                                    self.audio.play_sound("crowd_ooh")
+                            if evento.key == pygame.K_o:
+                                for b in self.balls:
+                                    b.on_out()
+                                    break
+                            if evento.key == pygame.K_p:
+                                for b in self.balls:
+                                    b.on_point_scored()
+                                    break
+                            # Reacciones/jingles de prueba
+                            if evento.key == pygame.K_c and "crowd_ooh" in self.audio.sounds:
                                 self.audio.play_sound("crowd_ooh")
-                        if evento.key == pygame.K_o:
-                            for b in self.balls:
-                                b.on_out()
-                                break
-                        if evento.key == pygame.K_p:
-                            for b in self.balls:
-                                b.on_point_scored()
-                                break
-
-                        # Reacciones/jingles de prueba
-                        if evento.key == pygame.K_c and "crowd_ooh" in self.audio.sounds:
-                            self.audio.play_sound("crowd_ooh")
-                        if evento.key == pygame.K_a and "crowd_ahh" in self.audio.sounds:
-                            self.audio.play_sound("crowd_ahh")
-                        if evento.key == pygame.K_k and "sting_match" in self.audio.sounds:
-                            self.audio.duck_music(0.10)
-                            self.audio.play_sound("sting_match")
-                            self.audio.unduck_music()
-                        if evento.key == pygame.K_g and "win_jingle" in self.audio.sounds:
-                            self._on_victory()
-                        if evento.key == pygame.K_l and "lose_jingle" in self.audio.sounds:
-                            self._on_game_over()
+                            # Remapeo: 'a' → 'f' para evitar conflicto con mover P2
+                            if evento.key == pygame.K_f and "crowd_ahh" in self.audio.sounds:
+                                self.audio.play_sound("crowd_ahh")
+                            if evento.key == pygame.K_k and "sting_match" in self.audio.sounds:
+                                self.audio.duck_music(0.10)
+                                self.audio.play_sound("sting_match")
+                                self.audio.unduck_music()
+                            if evento.key == pygame.K_g and "win_jingle" in self.audio.sounds:
+                                self._on_victory()
+                            if evento.key == pygame.K_l and "lose_jingle" in self.audio.sounds:
+                                self._on_game_over()
 
                     elif self.estado_juego == 'pausa':
                         if evento.key in (pygame.K_ESCAPE, pygame.K_p):
@@ -302,6 +327,8 @@ class Game:
 
             pygame.display.flip()
 
+        # Guardar mezcla al salir (si ajustaste con 1/2/3/4)
+        self._save_audio_config()
         pygame.quit()
 
     # ---------------------------
@@ -314,7 +341,10 @@ class Game:
             self.estado_juego = 'jugando'
             cx, cy = self.PANTALLA.get_width() // 2, self.PANTALLA.get_height() // 2
             self.balls.empty()
-            self.balls.add(Ball(cx, cy, game=self, vx=5, vy=-5))
+            # Crear pelota y disparar el saque explícitamente (no en __init__)
+            ball = Ball(cx, cy, game=self, vx=5, vy=-5)
+            self.balls.add(ball)
+            ball.start_rally()
         elif item == "Opciones":
             self._enter_options()
         elif item == "Salir":
