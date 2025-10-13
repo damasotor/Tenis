@@ -1,13 +1,13 @@
 {
     "project_name": "player",
-    "spritesheet_path": "Players.png",
+    "spritesheet_path": "player-sheet.png",
     "character_name": "you",
     "animations": {
         "idle":[
             {
                 "x": 0,
-                "y": 100,
-                "width": 44,
+                "y": 0,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_0",
                 "description": "Sugerido",
@@ -16,18 +16,18 @@
         ],
         "walk-right": [
             {
-                "x": 44,
+                "x": 100,
                 "y": 0,
-                "width": 44,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_1",
                 "description": "Sugerido",
                 "animation": "derecha"
             },
             {
-                "x": 88,
+                "x": 200,
                 "y": 0,
-                "width": 44,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_2",
                 "description": "Sugerido",
@@ -36,73 +36,268 @@
         ],
         "walk-left": [
             {
-                "x": 44,
-                "y": 100,
-                "width": 44,
+                "x": 300,
+                "y": 0,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_4",
                 "description": "Sugerido",
                 "animation": "izquierda"
             },
             {
-                "x": 88,
-                "y": 100,
-                "width": 44,
+                "x": 400,
+                "y": 0,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_5",
                 "description": "Sugerido",
                 "animation": "izquierda"
             }
         ],
-        "walk-left-P2": [
+        "walk-up": [
             {
-                "x": 176,
+                "x": 500,
                 "y": 0,
-                "width": 44,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_4",
                 "description": "Sugerido",
                 "animation": "izquierda"
             },
             {
-                "x": 220,
+                "x": 600,
                 "y": 0,
-                "width": 44,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_5",
                 "description": "Sugerido",
                 "animation": "izquierda"
+            }
+        ],
+        "walk-down": [
+            {
+                "x": 600,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            },
+            {
+                "x": 500,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            }
+        ],
+        "stroke-right": [
+            {
+                "x": 700,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "golpe-derecha"
+            },
+            {
+                "x": 800,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "golpe-derecha"
+            },
+            {
+                "x": 900,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "golpe-derecha"
+            }
+        ],
+        "stroke-left": [
+            {
+                "x": 1000,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "golpe-izquierda"
+            },
+            {
+                "x": 1100,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "golpe-izquierda"
+            },
+            {
+                "x": 1200,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "golpe-izquierda"
             }
         ],
         "idle-P2": [
             {
-                "x": 176,
+                "x": 1300,
                 "y": 0,
-                "width": 44,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_4",
                 "description": "Sugerido",
-                "animation": "izquierda"
+                "animation": "idle2"
+            }
+        ],
+        "walk-left-P2": [
+            {
+                "x": 1300,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "izquierda2"
+            },
+            {
+                "x": 1400,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "izquierda2"
             }
         ],
         "walk-right-P2": [
             {
-                "x": 264,
+                "x": 1300,
                 "y": 0,
-                "width": 44,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_4",
                 "description": "Sugerido",
                 "animation": "derecha2"
             },
             {
-                "x": 308,
+                "x": 1500,
                 "y": 0,
-                "width": 44,
+                "width": 100,
                 "height": 100,
                 "name": "sprite_5",
                 "description": "Sugerido",
                 "animation": "derecha2"
+            }
+        ],
+        "walk-up-P2": [
+            {
+                "x": 1600,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            },
+            {
+                "x": 1700,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            }
+        ],"walk-down-P2": [
+            {
+                "x": 1700,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            },
+            {
+                "x": 1600,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "izquierda"
+            }
+        ],
+        "stroke-left-P2": [
+            {
+                "x": 1800,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "golpe-izquierda2"
+            },
+            {
+                "x": 1900,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "golpe-izquierda2"
+            },
+            {
+                "x": 2000,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "golpe-izquierda2"
+            }
+        ],
+        "stroke-right-P2": [
+            {
+                "x": 2100,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_4",
+                "description": "Sugerido",
+                "animation": "golpe-derecha2"
+            },
+            {
+                "x": 2200,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "golpe-derecha2"
+            },
+            {
+                "x": 2300,
+                "y": 0,
+                "width": 100,
+                "height": 100,
+                "name": "sprite_5",
+                "description": "Sugerido",
+                "animation": "golpe-derecha2"
             }
         ]
     }

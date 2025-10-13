@@ -20,6 +20,13 @@ class Player(GameObject):
         #self.color = color
         self.velocidad = 8
 
+         # --- Estado del jugador ---
+        self.estado = "idle"
+        self.direccion1 = "right"
+        self.direccion2 = "right"
+        self.anim_timer = 0
+        self.frame_index = 0
+
         #Definir animación inicial según el jugador
         if self.is_player2:
             self.current_animation = "idle-P2"
@@ -32,41 +39,87 @@ class Player(GameObject):
     def mover(self, teclas):
         moved = False
 
+        if self.estado == "golpeando":
+            self.anim_timer += 1
+            frames = self.animations[self.current_animation]
+            anim_length = len(frames)
+
+            # Avanzar el frame en base al timer
+            self.frame_index = min(self.anim_timer, anim_length - 1)
+
+            if self.anim_timer >= anim_length:
+                # Cuando termine la animación, volver a idle
+                self.estado = "idle"
+                self.anim_timer = 0
+                self.frame_index = 0
+                self.current_animation = "idle-P2" if self.is_player2 else "idle"
+            return
+
         #Teclas diferentes para jugador2
         if self.is_player2:
             izquierda = teclas[pygame.K_a]
             derecha = teclas[pygame.K_d]
             arriba = teclas[pygame.K_w]
             abajo = teclas[pygame.K_s]
+            golpe = teclas[pygame.K_LCTRL]
         else:
             izquierda = teclas[pygame.K_LEFT]
             derecha = teclas[pygame.K_RIGHT]
             arriba = teclas[pygame.K_UP]
             abajo = teclas[pygame.K_DOWN]
+            golpe = teclas[pygame.K_SPACE]
 
         if izquierda:
             self.world_x -= self.velocidad
             if self.is_player2:
+                self.direccion2 = "left"
                 self.current_animation = "walk-left-P2"
             else:
+                self.direccion1 = "left"
                 self.current_animation = "walk-left"
             moved = True
 
         if derecha:
             self.world_x += self.velocidad
             if self.is_player2:
+                self.direccion2 = "right"
                 self.current_animation = "walk-right-P2"
             else:
+                self.direccion1 = "right"
                 self.current_animation = "walk-right"
             moved = True
 
         if arriba:
             self.world_y -= self.velocidad
+            if self.is_player2:
+                self.current_animation = "walk-up-P2"
+            else:
+                self.current_animation = "walk-up"
             moved = True
 
         if abajo:
             self.world_y += self.velocidad
+            if self.is_player2:
+                self.current_animation = "walk-down-P2"
+            else:
+                self.current_animation = "walk-down"
             moved = True
+
+        if golpe:
+                self.estado = "golpeando"
+                self.anim_timer += 1
+                if self.is_player2:
+                    if self.direccion2 == "left":
+                        self.current_animation = "stroke-left-P2" 
+                    else: 
+                        self.current_animation = "stroke-right-P2"
+                else:
+                    if self.direccion1 == "left":
+                        self.current_animation = "stroke-left"
+                    else: 
+                        self.current_animation = "stroke-right"
+                self.frame_index = 0
+                return  # no mover en este frame
 
         #Limitar la mitad de la cancha según el jugador
     
