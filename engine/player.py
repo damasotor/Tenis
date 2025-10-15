@@ -19,6 +19,14 @@ class Player(GameObject):
         #self.rect = pygame.Rect(x, y, ancho, alto)
         #self.color = color
         self.velocidad = 8
+        
+        # 🎾 NUEVO: Rectángulo para la raqueta (asumimos que la raqueta está en el centro/parte superior del cuerpo)
+        # Esto es conceptual, ajusta las dimensiones según el sprite
+        self.racket_rect = self.rect.copy()
+        self.racket_rect.width = self.rect.width // 2
+        self.racket_rect.height = self.rect.height // 3
+        self.racket_rect.centerx = self.rect.centerx
+        self.racket_rect.top = self.rect.top - 5 # Un poco por encima del jugador
 
         #Definir animación inicial según el jugador
         if self.is_player2:
@@ -88,3 +96,37 @@ class Player(GameObject):
 
         # Actualizar posición en pantalla (centrar personaje)
         self.rect.center = (iso_x, iso_y)
+        
+        # Actualizar la posición del rect de la raqueta junto con el cuerpo
+        self.racket_rect.centerx = self.rect.centerx
+        self.racket_rect.top = self.rect.top - 5
+
+    def check_ball_collision(self, ball):
+        """
+        Verifica la colisión de la pelota. 
+        Prioriza la raqueta sobre el cuerpo.
+        """
+        
+        # Colisión con la raqueta
+        if ball.rect.colliderect(self.racket_rect):
+            # Para evitar que se quede pegada
+            if ball.rect.centerx < self.racket_rect.centerx:
+                ball.rect.right = self.racket_rect.left - 1
+            else:
+                ball.rect.left = self.racket_rect.right + 1
+            
+            ball.on_racket_hit()
+            return True 
+            
+        # Colisión con el cuerpo baja prioridad
+        elif ball.rect.colliderect(self.rect):
+            # el choque
+            if ball.rect.centerx < self.rect.centerx:
+                ball.rect.right = self.rect.left - 1
+            else:
+                ball.rect.left = self.rect.right + 1
+                
+            ball.on_body_hit()
+            return True
+
+        return False # No hubo colisión
