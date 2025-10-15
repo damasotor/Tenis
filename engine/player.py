@@ -52,18 +52,16 @@ class Player(GameObject):
             frames = self.animations[self.current_animation]
             anim_length = len(frames)
 
-            # Avanzar el frame en base al timer
             self.frame_index = min(self.anim_timer, anim_length - 1)
 
             if self.anim_timer >= anim_length:
-                # Cuando termine la animación, volver a idle
                 self.estado = "idle"
                 self.anim_timer = 0
                 self.frame_index = 0
                 self.current_animation = "idle-P2" if self.is_player2 else "idle"
             return
 
-        #Teclas diferentes para jugador2
+        # Teclas por jugador
         if self.is_player2:
             izquierda = teclas[pygame.K_a]
             derecha = teclas[pygame.K_d]
@@ -77,80 +75,53 @@ class Player(GameObject):
             abajo = teclas[pygame.K_DOWN]
             golpe = teclas[pygame.K_SPACE]
 
+        # Movimiento horizontal y vertical
         if izquierda:
             self.world_x -= self.velocidad
-            if self.is_player2:
-                self.direccion2 = "left"
-                self.current_animation = "walk-left-P2"
-            else:
-                self.direccion1 = "left"
-                self.current_animation = "walk-left"
+            self.current_animation = "walk-left-P2" if self.is_player2 else "walk-left"
             moved = True
-
         if derecha:
             self.world_x += self.velocidad
-            if self.is_player2:
-                self.direccion2 = "right"
-                self.current_animation = "walk-right-P2"
-            else:
-                self.direccion1 = "right"
-                self.current_animation = "walk-right"
+            self.current_animation = "walk-right-P2" if self.is_player2 else "walk-right"
             moved = True
-
         if arriba:
             self.world_y -= self.velocidad
-            if self.is_player2:
-                self.current_animation = "walk-up-P2"
-            else:
-                self.current_animation = "walk-up"
+            self.current_animation = "walk-up-P2" if self.is_player2 else "walk-up"
             moved = True
-
         if abajo:
             self.world_y += self.velocidad
-            if self.is_player2:
-                self.current_animation = "walk-down-P2"
-            else:
-                self.current_animation = "walk-down"
+            self.current_animation = "walk-down-P2" if self.is_player2 else "walk-down"
             moved = True
 
         if golpe:
-                self.estado = "golpeando"
-                self.anim_timer += 1
-                if self.is_player2:
-                    if self.direccion2 == "left":
-                        self.current_animation = "stroke-left-P2" 
-                    else: 
-                        self.current_animation = "stroke-right-P2"
-                else:
-                    if self.direccion1 == "left":
-                        self.current_animation = "stroke-left"
-                    else: 
-                        self.current_animation = "stroke-right"
-                self.frame_index = 0
-                return  # no mover en este frame
+            self.estado = "golpeando"
+            self.anim_timer += 1
+            if self.is_player2:
+                self.current_animation = "stroke-left-P2" if self.direccion2 == "left" else "stroke-right-P2"
+            else:
+                self.current_animation = "stroke-left" if self.direccion1 == "left" else "stroke-right"
+            self.frame_index = 0
+            return  # no mover en este frame
 
-        #Limitar la mitad de la cancha según el jugador
-    
-        net_y = self.field.net_y
+        # --- Limitar según la posición de la red ---
+        # Coordenada y de la red en el mundo
+        net_world_y = self.field.height / 2  # asumimos que la red está en la mitad del campo
+
         if self.is_player2:
-            if self.world_y > net_y - 1:
-                self.world_y = net_y - 1
+            # no permitir avanzar más allá de la base de la red
+            if self.world_y - self.rect.height/2 > net_world_y:
+                self.world_y = net_world_y + self.rect.height/2
         else:
-            if self.world_y < net_y + 1:
-                self.world_y = net_y + 1
+            if self.world_y - self.rect.height/2 < net_world_y + 30:
+                self.world_y = net_world_y + 30 + self.rect.height/2
 
-        # Si el jugador se movió, actualizamos frame
+        # Actualizar frame si hubo movimiento
         if moved:
             self.frame_index = (self.frame_index + 1) % len(self.animations[self.current_animation])
-            #print("Frame actual:", self.frame_index)
 
-        # Convertir coordenadas del mundo → pantalla
+        # Convertir coordenadas del mundo a pantalla
         iso_x, iso_y = world_to_screen(self.world_x, self.world_y)
-
-        # Actualizar posición en pantalla (centrar personaje)
         self.rect.center = (iso_x, iso_y)
-        
-        # Actualizar la posición del rect de la raqueta junto con el cuerpo
         self.racket_rect.centerx = self.rect.centerx
         self.racket_rect.top = self.rect.top - 5
 

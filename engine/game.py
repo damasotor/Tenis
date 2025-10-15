@@ -187,7 +187,7 @@ class Game:
     def game_loop(self):
         ejecutando = True
         while ejecutando:
-            dt = self.reloj.tick(60)
+            dt = self.reloj.tick(15)
 
             # --- INPUT ---
             for evento in pygame.event.get():
@@ -322,8 +322,8 @@ class Game:
             else:
                 self.field.draw(self.PANTALLA)
 
-                if self._debug_bounds:
-                    self.field.draw_debug_bounds(self.PANTALLA)
+                #if self._debug_bounds:
+                #    self.field.draw_debug_bounds(self.PANTALLA)
 
                 self.balls.draw(self.PANTALLA)
                 self.jugador2.draw(self.PANTALLA)
