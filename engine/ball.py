@@ -131,14 +131,39 @@ class Ball(pygame.sprite.Sprite):
 
     # ---------- Hooks de eventos (con sonido) ----------
     def on_racket_hit(self):
-        """Llamá esto desde la colisión raqueta–pelota real."""
+        """Llamá esto desde la colisión raqueta–pelota real. Incluye frenado."""
         cands = [k for k in ("hit_racket", "hit_racket2", "hit_racket3")
                  if k in self.game.audio.sounds]
         key = random.choice(cands) if cands else "hit_racket"
         self.game.audio.play_sound_panned(key, self._calc_pan())
-        # Rebote vertical simple (luego podés calcular ángulo según zona de impacto)
-        self.vy *= -1
+        
+        # Rebote vertical y FRENADO (Amortiguación)
+        AMORTIGUACION = 0.65  # Factor de reducción de velocidad (ej: 35% de frenado)
+        
+        self.vy *= -1       # Invertir dirección vertical
+        self.vx *= AMORTIGUACION 
+        self.vy *= AMORTIGUACION
+        
+        # Asegurar velocidad mínima después del golpe para que siga jugando
+        MIN_VEL_AFTER_HIT = 3.0
+        if abs(self.vy) < MIN_VEL_AFTER_HIT:
+             self.vy = MIN_VEL_AFTER_HIT * (1 if self.vy >= 0 else -1)
+        # El ciclo update() se encarga de limitar al max_speed.
 
+    def on_body_hit(self):
+        """Llamá esto desde la colisión CUERPO–pelota. Es un error y produce un rebote 'muerto'."""
+        
+        # 1. Reproducir un sonido de impacto suave (usamos 'bounce_court' si no hay 'body_hit' SFX)
+        self.game.audio.play_sound_panned("bounce_court", self._calc_pan())
+        
+        # 2. Rebotar suavemente con mucha pérdida de energía (la pelota cae "muerta")
+        DEAD_BOUNCE_FACTOR = 0.25 # Gran reducción de velocidad
+        self.vx *= -DEAD_BOUNCE_FACTOR  # Invertir y casi detener horizontal
+        self.vy *= -DEAD_BOUNCE_FACTOR  # Invertir y casi detener vertical
+        
+        # 3. Marcar el punto (ya que chocar con el cuerpo es un error)
+        self.on_point_scored()
+        
     def on_out(self):
         self.game.audio.play_sound("out_whistle")
         # Reacción del público (60% de prob., si existe)
@@ -146,6 +171,7 @@ class Ball(pygame.sprite.Sprite):
             self.game.audio.play_sound("crowd_ahh")
 
     def on_point_scored(self):
+        """Método que maneja la puntuación (jingle y ducking)."""
         # Jingle con ducking suave de música + reacción (si existe)
         self.game.audio.duck_music(0.12)
         self.game.audio.play_sound("score_jingle")

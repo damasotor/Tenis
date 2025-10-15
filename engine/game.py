@@ -304,7 +304,14 @@ class Game:
                 self.jugador1.mover(teclas)
                 self.jugador2.mover(teclas)
                 self.balls.update()
-
+               
+                for ball in self.balls:
+                    # Comprobar colisión con Jugador 1
+                    self.jugador1.check_ball_collision(ball)
+                    
+                    # Comprobar colisión con Jugador 2
+                    self.jugador2.check_ball_collision(ball)
+                    
             # --- Render ---
             self.PANTALLA.fill(AZUL_OSCURO)
 
