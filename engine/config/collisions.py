@@ -1,5 +1,3 @@
-# engine/config/collisions.py
-
 """
 Parámetros de colisiones (tunables sin tocar el código de Player).
 Valores pensados para sprites humanoides ~48–64 px de alto.
