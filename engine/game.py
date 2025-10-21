@@ -344,8 +344,9 @@ class Game:
 
                 # Movimiento P2: IA en 1P; humano en 2P
                 if self.modo == "1P" and self.ai_p2 is not None and self._ball_main is not None:
-                    self.ai_p2.ball = self._ball_main  # asegura referencia actual
-                    self.ai_p2.update()
+                    #self.ai_p2.ball = self._ball_main  # asegura referencia actual
+                    #self.ai_p2.update()
+                    self.jugador2.mover(teclas)
                 else:
                     self.jugador2.mover(teclas)
 

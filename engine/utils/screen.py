@@ -5,7 +5,7 @@ SCALE = 50
 # Si todavía no existe engine/utils/iso.py o falla el import por paths,
 # usamos las funciones locales (no se rompe nada).
 try:
-    from engine.utils.iso import world_to_screen, screen_to_world  # reexport
+    from engine.utils.iso import world_to_screen, screen_to_world, to_pixels, ANCHO, ALTO  # reexport
 except Exception:
     def world_to_screen(x, y):
         iso_x = x - y
@@ -20,3 +20,12 @@ except Exception:
         x = (iso_x + 2 * iso_y) / 2
         y = x - iso_x
         return x, y
+
+    def to_pixels(iso_x: float, iso_y: float, scale: float,
+        offset_x: int = ANCHO // 2, offset_y: int = ALTO // 2):
+        """
+        Convierte coordenadas isométricas a coordenadas de pantalla (píxeles).
+        """
+        sx = int(offset_x + iso_x * scale)
+        sy = int(offset_y + iso_y * scale)
+        return sx, sy

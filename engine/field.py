@@ -3,7 +3,8 @@ from typing import Optional, Tuple
 
 import pygame
 
-from engine.utils.screen import world_to_screen, ANCHO, ALTO, SCALE
+from engine.net import Net
+from engine.utils.screen import to_pixels, world_to_screen, ANCHO, ALTO, SCALE
 
 # Loader de texturas con fallback seguro
 try:
@@ -44,16 +45,6 @@ def compute_offset(field_width: float, field_height: float, scale: float) -> Tup
     return offset_x, offset_y
 
 
-def to_pixels(iso_x: float, iso_y: float, scale: float,
-              offset_x: int = ANCHO // 2, offset_y: int = ALTO // 2) -> Tuple[int, int]:
-    """
-    Convierte coordenadas isométricas a coordenadas de pantalla (píxeles).
-    """
-    sx = int(offset_x + iso_x * scale)
-    sy = int(offset_y + iso_y * scale)
-    return sx, sy
-
-
 class Field:
     def __init__(self, width: int, height: int, texture_path: Optional[str] = None):
         self.width = width
@@ -62,6 +53,7 @@ class Field:
         # Mantengo tu net_y como lo tenías (no rompemos semántica en este paso)
         self.net_y = (height // 2) + 64
         self.net_height = 50
+        self.net = Net(self)
 
         # --- Zonas lógicas (mundo) ---
         self.zones = {
@@ -154,6 +146,9 @@ class Field:
         Dibuja la cancha con textura centrada y la red en el centro.
         Además, cachea el rect del court para que Ball lo pueda usar en este frame.
         """
+        # Fondo fuera de la cancha
+        screen.fill((60, 160, 60))  # verde
+
         W, H = screen.get_width(), screen.get_height()
 
         # --- Fondo / textura ---
@@ -199,3 +194,8 @@ class Field:
             }.get(name, (255, 255, 255))
 
             pygame.draw.polygon(screen, color, corners, 2)
+
+        self.net.update()
+        self.net.draw_debug(screen, SCALE, self.offset_x, self.offset_y)
+        self.net.update_net(self._last_court_rect)
+        self.net.draw(screen)
