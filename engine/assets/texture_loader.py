@@ -43,7 +43,7 @@ def load_texture(path: str, *, with_alpha: bool = False) -> pygame.Surface:
         surf = surf.convert_alpha()
     else:
         # Para texturas grandes (fondos), convert() suele rendir mejor
-        surf = surf.convert()
+        surf = surf.convert_alpha()
 
     _TEXTURE_CACHE[(norm_path, with_alpha)] = surf
     return surf

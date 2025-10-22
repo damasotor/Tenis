@@ -215,6 +215,7 @@ class Ball(pygame.sprite.Sprite):
             self.spin = 0.0
             return
 
+        """
         # ======= RED =======
         net_rect = field.get_net_rect(screen) if hasattr(field, "get_net_rect") else self._fallback_net_rect(screen)
         if self.rect.colliderect(net_rect):
@@ -242,7 +243,7 @@ class Ball(pygame.sprite.Sprite):
                 self._last_net_hit = now
 
             self._trigger_squash()
-
+        """
     # ----------------- Eventos -----------------
     def _on_bounce_court(self):
         if hasattr(self.game, "audio"):
@@ -360,6 +361,7 @@ class Ball(pygame.sprite.Sprite):
         return pygame.transform.smoothscale(surf, (w, h))
 
     # Fallback net
+    """ 
     def _fallback_net_rect(self, screen) -> pygame.Rect:
         W = screen.get_width()
         H = screen.get_height()
@@ -368,3 +370,4 @@ class Ball(pygame.sprite.Sprite):
         net_x = (W - net_w) // 2
         net_y = (H - net_h) // 2
         return pygame.Rect(net_x, net_y, net_w, net_h)
+    """

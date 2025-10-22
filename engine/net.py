@@ -20,11 +20,13 @@ class Net:
             print(f"No se pudo cargar la textura de la red: {e}")
             self.texture = None
 
-
+    
     def update(self):
         # Línea base
         self.world_line = ((0, self.field.height / 2), (self.field.width, self.field.height / 2))
         self.rect = pygame.Rect(0, self.field.height / 2 - self.height / 2, self.field.width, self.height)
+        print("Rect red lógica:", self.rect)
+        print("Línea red debug:", self.world_line)
 
     def draw_debug(self, screen, scale, offset_x, offset_y):
         if not self.world_line:
@@ -71,3 +73,5 @@ class Net:
             screen.blit(scaled, rect)
         else:
             pygame.draw.rect(screen, (255, 0, 0), self.rect)
+
+            

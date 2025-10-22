@@ -74,6 +74,29 @@ class Player(GameObject):
         self.racket_rect = self.rect.copy()
         self._update_collision_boxes()
 
+
+        #Colision del jugador
+        self.hit_rect = self.rect.copy()
+        self.hit_rect.width = self.rect.width * 0.4 #40% del ancho original
+        self.hit_rect.height = self.rect.height * 0.6 # 60% del alto original
+        self.hit_rect.center = self.rect.center
+
+        #Colision de la raqueta
+        self.racket_active = False
+        self.racket_width = self.rect.width // 2
+        self.racket_height = self.rect.height // 1.3
+        self.racket_offset_x = self.rect.width // 3
+        self.racket_offset_y = 0
+        self.racket_rect = pygame.Rect(0, 0, self.racket_width, self.racket_height)
+
+        # --- Estado del jugador --- 
+        self.estado = "idle" 
+        self.direccion1 = "right" 
+        self.direccion2 = "right" 
+        self.anim_timer = 0 
+        self.frame_index = 0
+
+
         # Animación inicial
         if self.is_player2 and "idle-P2" in self.animations:
             self.current_animation = "idle-P2"
@@ -90,6 +113,40 @@ class Player(GameObject):
 
         self._project_to_screen()
 
+
+    def update_racket(self): 
+        # Determinar offset horizontal según dirección y golpe
+        if self.is_player2:
+            mirando = self.direccion2
+        else:
+            mirando = self.direccion1
+
+        # Distancia base desde el cuerpo
+        base_offset = self.racket_offset_x
+
+        # Si está golpeando, movemos más la raqueta hacia afuera
+        if self.estado == "golpeando":
+            base_offset *= 60.6  # podés ajustar este valor (1.6 = 60% más lejos)
+
+        # Aplicar dirección
+        if mirando == "right":
+            offset_x = abs(base_offset)
+        else:
+            offset_x = -abs(base_offset)
+
+        # Actualizar posición de la hitbox
+        self.racket_rect.centerx = self.rect.centerx + offset_x
+        self.racket_rect.centery = self.rect.centery + self.racket_offset_y
+        """
+        # Determinar offset horizontal según dirección 
+        if (self.is_player2 and self.direccion2 == "right") or (not self.is_player2 and self.direccion1 == "right"):
+            offset_x = abs(self.racket_offset_x) 
+        else: 
+            offset_x = -abs(self.racket_offset_x) 
+            
+        self.racket_rect.centerx = self.rect.centerx + offset_x 
+        self.racket_rect.top = self.rect.top + self.racket_offset_y
+        """
     # ---------------------------
     # Helpers internos
     # ---------------------------
@@ -115,7 +172,21 @@ class Player(GameObject):
         rw = max(4, int(w * RACKET_W_SCALE))
         rh = max(4, int(h * RACKET_H_SCALE))
         racket = pygame.Rect(0, 0, rw, rh)
-        racket.centerx = self.rect.centerx
+
+        # --- 🔁 Offset lateral dinámico según dirección ---
+        if self.is_player2:
+            mirando = getattr(self, "direccion2", "right")
+        else:
+            mirando = getattr(self, "direccion1", "right")
+
+        # desplazamiento lateral (en px)
+        offset_x = int(w * 0.3)  # podés ajustar 0.3 → cuanto más grande, más se separa del cuerpo
+
+        if mirando == "left":
+            racket.centerx = self.rect.centerx - offset_x
+        else:
+            racket.centerx = self.rect.centerx + offset_x
+
         racket.top = self.rect.top + RACKET_Y_OFFSET
         self.racket_rect = racket
 
@@ -149,15 +220,30 @@ class Player(GameObject):
     def mover(self, teclas):
         moved = False
 
+        # --- Animación de golpe --- 
+        if self.estado == "golpeando": 
+            self.anim_timer += 1 
+            frames = self.animations[self.current_animation] 
+            anim_length = len(frames) 
+            self.frame_index = min(self.anim_timer, anim_length - 1) 
+            
+            if self.anim_timer >= anim_length: 
+                self.estado = "idle" 
+                self.anim_timer = 0 
+                self.frame_index = 0 
+                self.current_animation = "idle-P2" if self.is_player2 else "idle" 
+            return
+
         if self.is_player2:
-            k_left, k_right, k_up, k_down = pygame.K_a, pygame.K_d, pygame.K_w, pygame.K_s
+            k_left, k_right, k_up, k_down, k_swing = pygame.K_a, pygame.K_d, pygame.K_w, pygame.K_s, pygame.K_f
         else:
-            k_left, k_right, k_up, k_down = pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN
+            k_left, k_right, k_up, k_down, k_swing = pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE
 
         press_up    = bool(teclas[k_up])
         press_down  = bool(teclas[k_down])
         press_left  = bool(teclas[k_left])
         press_right = bool(teclas[k_right])
+        press_swing = bool(teclas[k_swing])
 
         # Modo de velocidad
         press_shift = bool(teclas[pygame.K_LSHIFT] or teclas[pygame.K_RSHIFT])
@@ -185,18 +271,30 @@ class Player(GameObject):
         dir_x = 0.0
         dir_y = 0.0
         if press_up:
-            dir_x += -1.0; dir_y += -1.0
+            dx, dy = world_to_screen(-1, -1)
+            dir_x += dx
+            dir_y += dy
         if press_down:
-            dir_x +=  1.0; dir_y +=  1.0
-        if press_left:
-            dir_x += -1.0; dir_y +=  1.0
-        if press_right:
-            dir_x +=  1.0; dir_y += -1.0
+            dx, dy = world_to_screen(1, 1)
+            dir_x += dx
+            dir_y += dy
 
-        if dir_x or dir_y:
+        # Izquierda/derecha
+        if press_left:
+            dx, dy = world_to_screen(-1, 1)
+            dir_x += dx
+            dir_y += dy
+        if press_right:
+            dx, dy = world_to_screen(1, -1)
+            dir_x += dx
+            dir_y += dy
+
+        # Normalizar vector para que la diagonal no sea más rápida
+        if dir_x != 0 or dir_y != 0:
             length = math.hypot(dir_x, dir_y)
-            if length > 0:
-                dir_x /= length; dir_y /= length
+            dir_x /= length
+            dir_y /= length
+
             self.world_x += dir_x * speed
             self.world_y += dir_y * speed
             moved = True
@@ -212,15 +310,38 @@ class Player(GameObject):
                 if dir_x < 0:
                     self.current_animation = "walk-left-P2" if (self.is_player2 and "walk-left-P2" in self.animations) else \
                                              ("walk-left" if "walk-left" in self.animations else self.current_animation)
+                    if "walk-left-P2" in self.current_animation:
+                        self.direccion2 = "left"
+                    else:
+                        self.direccion1 = "left"
                 elif dir_x > 0:
                     self.current_animation = "walk-right-P2" if (self.is_player2 and "walk-right-P2" in self.animations) else \
                                              ("walk-right" if "walk-right" in self.animations else self.current_animation)
+                    if "walk-right-P2" in self.current_animation:
+                        self.direccion2 = "right"
+                    else:
+                        self.direccion1 = "right"
         else:
             self.current_animation = "idle-P2" if (self.is_player2 and "idle-P2" in self.animations) else \
                                      ("idle" if "idle" in self.animations else self.current_animation)
 
         self._last_ix = dir_x
         self._last_iy = dir_y
+
+        # --- Golpe --- 
+        if press_swing: 
+            self.estado = "golpeando" 
+            self.racket_active = True 
+            
+            self.anim_timer = 0 
+            if self.is_player2: 
+                self.current_animation = "stroke-left-P2" if self.direccion2 == "left" else "stroke-right-P2" 
+            else: 
+                self.current_animation = "stroke-left" if self.direccion1 == "left" else "stroke-right" 
+            self.frame_index = 0 
+            return # no mover en este frame 
+        else: 
+            self.racket_active = False
 
         # Limitar por la red
         if self.field and hasattr(self.field, "net_y"):
@@ -234,9 +355,10 @@ class Player(GameObject):
 
         # Avance de frame por movimiento (fallback sin Animator)
         if moved and self.current_animation in self.animations:
-            frames = self.animations[self.current_animation]
-            if frames:
-                self.frame_index = (self.frame_index + 1) % len(frames)
+            self.frame_index = (self.frame_index + 1) % len(self.animations[self.current_animation])
+            #frames = self.animations[self.current_animation]
+            #if frames:
+            #    self.frame_index = (self.frame_index + 1) % len(frames)
 
         self._project_to_screen()
 
@@ -277,67 +399,65 @@ class Player(GameObject):
         if not ball or not hasattr(ball, "rect"):
             return False
 
-        # 1) Raqueta
-        if ball.rect.colliderect(self.racket_rect):
+        # --- 1) Colisión física de la raqueta ---
+        if self.racket_active and ball.rect.colliderect(self.racket_rect):
+
+            # Evita superposición directa
             if ball.rect.centerx < self.racket_rect.centerx:
                 ball.rect.right = self.racket_rect.left - 1
             else:
                 ball.rect.left = self.racket_rect.right + 1
 
-            # Dirección base del golpe
+            # --- 2) Cálculo de fuerza y dirección base ---
+            # h_ratio mide cuán centrado golpeó la pelota (-1 = borde izq, +1 = borde der)
             h_span = max(1, self.racket_rect.width // 2)
             h_ratio = _clamp((ball.rect.centerx - self.racket_rect.centerx) / h_span, -1.0, 1.0)
-            push_x = self._last_ix * 2.0
-            push_y = self._last_iy * 1.2
-            spin_rand = random.uniform(-0.25, 0.25)  # leve variación
 
+            # Última dirección de movimiento del jugador
+            push_x = self._last_ix * 2.0   # movimiento lateral previo
+            push_y = self._last_iy * 1.2   # movimiento vertical previo
+
+            # Variación aleatoria leve (para evitar golpes idénticos)
+            spin_rand = random.uniform(-0.25, 0.25)
+
+            # --- 3) Límites de velocidad ---
             max_spd = getattr(ball, "_max_speed", 9.0)
             min_spd = getattr(ball, "_min_speed", 2.0)
 
-            vx_new = _clamp((h_ratio * 6.0) + push_x + spin_rand, -max_spd + 0.5, max_spd - 0.5)
-            vy_base = 4.0 + abs(push_y) * 1.2
-            vy_new = -(max(min_spd + 1.0, vy_base))
+            # Magnitud base del golpe
+            vy_base = 7.0 + abs(push_y) * 1.2 #Modificar el primer número para variar la velocidad de la pelota
+            speed = max(min_spd + 1.0, vy_base)
 
-            # Asignar spin según modo
+            # --- 4) Dirección isométrica ---
+            # Golpe principal hacia el noreste (x+, y-)
+            angle = 45
+            dir_x = math.cos(math.radians(angle))
+            dir_y = -math.sin(math.radians(angle))
+
+            # Solo invertir la orientación si es player2
+            if getattr(self, "is_player2", False):
+                dir_x *= -1
+                dir_y *= -1
+
+            # Aplicar desplazamiento lateral y variación aleatoria
+            spin_rand = random.uniform(-0.8, 0.8)
+            vx_new = (dir_x * speed) + (h_ratio * 2.0) + spin_rand
+            vy_new = (dir_y * speed) - (h_ratio * 1.0)
+
+            ball.vx = _clamp(vx_new, -max_spd, max_spd)
+            ball.vy = _clamp(vy_new, -max_spd, max_spd)
+
+            # --- 5) Altura y efecto de spin ---
+            ball.vel_altura = 5.5  # impulso hacia arriba al golpear
+            #ball.altura = max(ball.altura, 8.0)
+
             if self._shot_mode == "topspin":
-                spin_val = SPIN_TOPSPIN
+                ball.spin = SPIN_TOPSPIN
             elif self._shot_mode == "slice":
-                spin_val = SPIN_SLICE
+                ball.spin = SPIN_SLICE
             else:
-                spin_val = SPIN_FLAT
+                ball.spin = SPIN_FLAT
 
-            # Audio + feedback
-            if hasattr(ball, "on_racket_hit"):
-                ball.on_racket_hit()
-
-            self._hit_flash_active = True
-            self._hit_flash_start = pygame.time.get_ticks()
-
-            # Aplicar velocidades y spin
-            ball.vx = vx_new
-            ball.vy = vy_new
-            if hasattr(ball, "apply_shot_spin"):
-                ball.apply_shot_spin(spin_val)
-
-            self._play_swing()
-            return True
-
-        # 2) Cuerpo (penalización: punto para el rival)
-        if ball.rect.colliderect(self.body_rect):
-            if ball.rect.centerx < self.body_rect.centerx:
-                ball.rect.right = self.body_rect.left - 1
-            else:
-                ball.rect.left = self.body_rect.right + 1
-            if hasattr(ball, "on_body_hit"):
-                ball.on_body_hit()
-
-            # Asignar punto al oponente inmediatamente si Game expone point_for
-            try:
-                if hasattr(ball.game, "point_for"):
-                    winner = "P1" if self.is_player2 else "P2"
-                    ball.game.point_for(winner)
-            except Exception:
-                pass
             return True
 
         return False

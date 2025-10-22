@@ -89,7 +89,7 @@ class Field:
                 # loader unificado (convert() ya se hace allí)
                 self.texture = _load_texture(cand)
             else:
-                self.texture = pygame.image.load(cand).convert()
+                self.texture = pygame.image.load(cand).convert_alpha()
         except Exception as e:
             print(f"[Field] No se pudo cargar la textura de la cancha '{cand}': {e}")
             self.texture = None

@@ -224,7 +224,7 @@ class Game:
     def game_loop(self):
         ejecutando = True
         while ejecutando:
-            dt = self.reloj.tick(60)
+            dt = self.reloj.tick(15)
 
             # INPUT
             for evento in pygame.event.get():
@@ -337,6 +337,7 @@ class Game:
 
             # LÓGICA
             if self.estado_juego == 'jugando':
+
                 teclas = pygame.key.get_pressed()
 
                 # Movimiento P1 (humano)
