@@ -37,9 +37,38 @@ class Ball(pygame.sprite.Sprite):
     - Trail, sombra, squash/stretch
     - Spin con efecto en trayectoria (grav extra/menos y deriva)
     """
+
+    # ----------------- HELPERS INTERNOS / PROYECCIÓN ⭐️ MOVIDO AQUÍ ⭐️ -----------------
+
+    def _project_to_screen(self):
+        """Convierte las coordenadas de mundo (world_x, world_y) a coordenadas de pantalla (rect).
+        Esto debe ejecutarse ANTES de cualquier colisión basada en el rect."""
+        try:
+             # Si el objeto 'game' tiene un método de conversión (ej: isométrica), úsalo.
+             # Asumimos que el método se llama world_to_screen y está en el objeto game.
+             iso_x, iso_y = self.game.world_to_screen(self.world_x, self.world_y)
+             self.rect.center = (iso_x, iso_y)
+        except (AttributeError, NameError):
+             # Fallback: juego 2D puro. Las coordenadas de mundo son las de pantalla.
+             self.rect.center = (int(self.world_x), int(self.world_y))
+    
+    # Este método auxiliar sirve para sincronizar world_x/y cuando rect es ajustado
+    def _sync_world_from_rect(self):
+        """Sincroniza world_x/y con rect.center. Usado después de colisiones."""
+        # Esto solo es correcto en juegos 2D puros. Si es isométrica, necesitarás un 
+        # screen_to_world que tu juego podría no tener. Usamos la simplificación 2D por ahora.
+        self.world_x = float(self.rect.centerx)
+        self.world_y = float(self.rect.centery)
+
+
+    # ----------------- INICIALIZACIÓN -----------------
     def __init__(self, x: int, y: int, game, vx: float = 4, vy: float = -5):
         super().__init__()
         self.game = game
+
+        # ⭐️ Coordenadas de Mundo (world_x/y) - Necesarias para la IA ⭐️
+        self.world_x = float(x)
+        self.world_y = float(y)
 
         # ----------------- Física -----------------
         self.vx = vx
@@ -54,7 +83,7 @@ class Ball(pygame.sprite.Sprite):
         self._net_cd_ms = 90
         self._last_net_hit = -10**9
 
-        # ----------------- Visual -----------------
+        # ----------------- Visual (Se mantiene igual) -----------------
         self._use_sprite = False
         self._sprite_sheet: Optional[pygame.Surface] = None
         self._animations = collections.defaultdict(list)  # type: ignore
@@ -78,9 +107,11 @@ class Ball(pygame.sprite.Sprite):
 
         # Imagen / rect
         self._load_sprite_or_fallback()
-        self.rect.center = (x, y)
+        
+        # ⭐️ LLAMADA CORRECTA: El método _project_to_screen ya está definido arriba ⭐️
+        self._project_to_screen()
 
-    # ----------------- Carga sprite opcional -----------------
+    # ----------------- Carga sprite opcional (Se mantiene igual) -----------------
     def _load_sprite_or_fallback(self):
         json_path = os.path.join("assets", "sprites", "ball", "ball.json")
         try:
@@ -131,7 +162,7 @@ class Ball(pygame.sprite.Sprite):
             self.rect = self.image.get_rect()
             self._use_sprite = False
 
-    # ----------------- API -----------------
+    # ----------------- API (Se mantiene igual) -----------------
     def start_rally(self):
         if hasattr(self.game, "audio"):
             self.game.audio.duck_music(0.18)
@@ -142,23 +173,27 @@ class Ball(pygame.sprite.Sprite):
         """Se llama desde Player al impactar: setea spin inicial del tiro."""
         self.spin = float(spin_value)
 
-    # ----------------- Helpers audio -----------------
+    # ----------------- Helpers audio (Se mantiene igual) -----------------
     def _calc_pan(self) -> float:
         W = self.game.PANTALLA.get_width()
         x = self.rect.centerx
         return (x / max(1, W)) * 2.0 - 1.0
 
-    # ----------------- Update -----------------
+    # ----------------- Update ⭐️ MODIFICADO ⭐️ -----------------
     def update(self):
-        # Movimiento base
-        self.rect.x += self.vx
-        self.rect.y += self.vy
+        # ⭐️ CAMBIO: Movimiento base afecta world_x/y ⭐️
+        self.world_x += self.vx
+        self.world_y += self.vy
+
+        # ⭐️ LLAMADA CRÍTICA: Proyectar la posición de mundo a rect para colisiones ⭐️
+        self._project_to_screen() 
 
         # Trail
         if self._trail_enabled:
+            # Usamos self.rect.center, ya que es la posición en pantalla
             self._trail.append((self.rect.centerx, self.rect.centery))
 
-        # Spin effect → modifica trayectoria
+        # Spin effect → modifica trayectoria (Se mantiene igual, modificando vx/vy)
         if abs(self.spin) > 1e-3:
             # Aceleración vertical por spin (topspin “empuja” hacia abajo; slice hacia arriba)
             self.vy += self.spin * SPIN_GRAVITY_SCALE
@@ -168,7 +203,7 @@ class Ball(pygame.sprite.Sprite):
             # Decaimiento
             self.spin *= SPIN_DECAY
 
-        # Velocidades mín/máx
+        # Velocidades mín/máx (Se mantiene igual, ajustando vx/vy)
         if 0 < abs(self.vx) < self._min_speed:
             self.vx = self._min_speed * (1 if self.vx >= 0 else -1)
         if 0 < abs(self.vy) < self._min_speed:
@@ -176,7 +211,7 @@ class Ball(pygame.sprite.Sprite):
         self.vx = max(-self._max_speed, min(self._max_speed, self.vx))
         self.vy = max(-self._max_speed, min(self._max_speed, self.vy))
 
-        # Animator por tiempo
+        # Animator por tiempo (Se mantiene igual)
         if self._use_sprite and self._animator and self._current_anim in self._animations:
             if self._animator.update(self._current_anim):
                 frames = self._animations[self._current_anim]
@@ -188,36 +223,44 @@ class Ball(pygame.sprite.Sprite):
         field = self.game.field
         court_rect = field.get_court_rect(screen) if hasattr(field, "get_court_rect") else screen.get_rect()
 
+        # Colisiones y rebotes
         if self.rect.left <= court_rect.left:
             self.rect.left = court_rect.left
             self.vx *= -1
             self._on_bounce_court()
+            self._sync_world_from_rect() # ⭐️ Sincronizar world_x/y después de ajustar rect ⭐️
 
         if self.rect.right >= court_rect.right:
             self.rect.right = court_rect.right
             self.vx *= -1
             self._on_bounce_court()
+            self._sync_world_from_rect() # ⭐️ Sincronizar world_x/y después de ajustar rect ⭐️
 
         if self.rect.top <= court_rect.top:
             self.rect.top = court_rect.top
             self.vy *= -1
             self._on_bounce_court()
+            self._sync_world_from_rect() # ⭐️ Sincronizar world_x/y después de ajustar rect ⭐️
 
         if self.rect.bottom >= court_rect.bottom:
             # OUT: punto para el rival del último que golpeó
             self.rect.bottom = court_rect.bottom
             self.on_out()
-            # Respawn al centro
+            
+            # ⭐️ CAMBIO: Respawn al centro afecta world_x/y y se proyecta ⭐️
             cx, cy = screen.get_width() // 2, screen.get_height() // 2
-            self.rect.center = (cx, cy)
-            self.vx = random.choice([-5, 5])
-            self.vy = -5
+            self.world_x = cx
+            self.world_y = cy
+            self.vx = random.choice([-5.0, 5.0]) # Usamos float
+            self.vy = -5.0
             self.spin = 0.0
+            self._project_to_screen() # Actualiza el rect
             return
 
         # ======= RED =======
         net_rect = field.get_net_rect(screen) if hasattr(field, "get_net_rect") else self._fallback_net_rect(screen)
         if self.rect.colliderect(net_rect):
+            # ... (Lógica de rebote en la red se mantiene igual, ajustando rect y vx/vy)
             if abs(self.vx) < 1e-6:
                 if self.rect.centerx >= net_rect.centerx:
                     self.rect.left = net_rect.right + 1
@@ -242,8 +285,14 @@ class Ball(pygame.sprite.Sprite):
                 self._last_net_hit = now
 
             self._trigger_squash()
+            self._sync_world_from_rect() # ⭐️ Sincronizar world_x/y después de ajustar rect ⭐️
+            
+        # ⭐️ El último punto de la trail siempre debe ser la posición final ⭐️
+        if self._trail_enabled and len(self._trail) > 0:
+             self._trail[-1] = (self.rect.centerx, self.rect.centery)
 
-    # ----------------- Eventos -----------------
+
+    # ----------------- Eventos (Se mantienen iguales) -----------------
     def _on_bounce_court(self):
         if hasattr(self.game, "audio"):
             self.game.audio.play_sound_panned("bounce_court", self._calc_pan())
@@ -306,7 +355,7 @@ class Ball(pygame.sprite.Sprite):
                 self.game.audio.play_sound("crowd_ooh")
             self.game.audio.unduck_music()
 
-    # ----------------- Draw -----------------
+    # ----------------- Draw (Se mantiene igual) -----------------
     def draw(self, surface: pygame.Surface):
         # Sombra
         if self._shadow_enabled:
