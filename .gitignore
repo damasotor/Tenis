@@ -1,4 +1,9 @@
+# Ignorar archivos compilados de Python
 __pycache__/
 *.pyc
+
+# Ignorar entorno virtual
 venv/
-.DS_Store
+
+# Ignorar logs, dumps, etc.
+*.log
