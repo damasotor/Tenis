@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     # Inicializar Pygame (audio y video)
     pygame.init()
-
+    
     try:
         game = Game()
         game.game_loop()

@@ -7,6 +7,8 @@ from typing import Optional, List, Tuple
 
 import pygame
 
+from engine.utils.screen import screen_to_world
+
 TrailPoint = Tuple[int, int]
 FrameRect = Tuple[int, int, int, int]
 
@@ -79,6 +81,28 @@ class Ball(pygame.sprite.Sprite):
         # Imagen / rect
         self._load_sprite_or_fallback()
         self.rect.center = (x, y)
+
+        # Gravedad y rebote
+        self.gravity = 0.35     # fuerza de gravedad
+        self.bounce_factor = 0.65  # energía retenida al rebotar
+        self.ground_y = game.PANTALLA.get_height() * 0.78  # altura del suelo
+
+        # ----------------- Propiedades útiles -----------------
+    @property
+    def radius(self) -> float:
+        """Radio de la pelota (para colisiones isométricas)."""
+        return self.rect.width / 2
+
+    @property
+    def screen_x(self) -> float:
+        """Posición X en pantalla (centro)."""
+        return float(self.rect.centerx)
+
+    @property
+    def screen_y(self) -> float:
+        """Posición Y en pantalla (centro)."""
+        return float(self.rect.centery)
+
 
     # ----------------- Carga sprite opcional -----------------
     def _load_sprite_or_fallback(self):
@@ -154,6 +178,8 @@ class Ball(pygame.sprite.Sprite):
         self.rect.x += self.vx
         self.rect.y += self.vy
 
+        
+
         # Trail
         if self._trail_enabled:
             self._trail.append((self.rect.centerx, self.rect.centery))
@@ -215,6 +241,31 @@ class Ball(pygame.sprite.Sprite):
             self.spin = 0.0
             return
 
+
+        # ======= RED ISOMÉTRICA =======
+        if hasattr(field, "ball_hits_net"):
+            if field.ball_hits_net((self.screen_x, self.screen_y), self.radius):
+                self.vy *= -0.5   # Rebote vertical
+                self.vx *=  0.8   # Pequeño frenado
+                self.rect.y -= 2  # Corrección visual mínima
+                self._trigger_squash()
+
+        # ======= GRAVEDAD Y REBOTE =======
+        self.vy += self.gravity  # aplica gravedad
+
+        # Si toca el suelo → rebote
+        if self.rect.bottom >= self.ground_y:
+            self.rect.bottom = self.ground_y
+            self.vy = -abs(self.vy) * self.bounce_factor
+
+            # Si el rebote es muy pequeño, lo anulamos (queda quieta)
+            if abs(self.vy) < 1.2:
+                self.vy = 0
+
+        print(f"Altura de la pelota: {self.rect.bottom}")
+        x, y = screen_to_world(self.rect.centerx, self.rect.centery)
+        print(f"Altura de la pelota (mundo): {y}")
+        
         """
         # ======= RED =======
         net_rect = field.get_net_rect(screen) if hasattr(field, "get_net_rect") else self._fallback_net_rect(screen)
@@ -311,11 +362,22 @@ class Ball(pygame.sprite.Sprite):
     def draw(self, surface: pygame.Surface):
         # Sombra
         if self._shadow_enabled:
-            shadow_w = int(self.rect.width * 0.7)
-            shadow_h = max(3, int(self.rect.height * 0.20))
+            # ======= Sombra proyectada =======
+            # Altura real (distancia al suelo)
+            altura = max(0, self.ground_y - self.rect.bottom)
+
+            # La sombra se achica y aclara cuanto más alta está la pelota
+            scale = max(0.4, 1.0 - altura / 400.0)  # 400 px = altura “máxima” razonable
+            alpha = int(120 * scale)
+
+            shadow_w = int(self.rect.width * 1.1 * scale)
+            shadow_h = max(3, int(self.rect.height * 0.25 * scale))
+
             shadow = pygame.Surface((shadow_w, shadow_h), pygame.SRCALPHA)
-            pygame.draw.ellipse(shadow, (0, 0, 0, 70), shadow.get_rect())
-            shadow_rect = shadow.get_rect(midtop=(self.rect.centerx, self.rect.bottom - shadow_h // 2))
+            pygame.draw.ellipse(shadow, (0, 0, 0, alpha), shadow.get_rect())
+
+            # La sombra se dibuja fija en el suelo (ground_y)
+            shadow_rect = shadow.get_rect(center=(self.rect.centerx, self.ground_y))
             surface.blit(shadow, shadow_rect)
 
         # Trail
