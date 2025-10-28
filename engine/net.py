@@ -3,7 +3,6 @@ import os
 from engine.utils.screen import SCALE, world_to_screen, to_pixels
 
 
-
 class Net:
     def __init__(self, field, color=(255, 0, 0)):
         self.field = field
@@ -11,24 +10,28 @@ class Net:
         self.height = 1.0  # Altura de la red en unidades de mundo
         self.rect = None
         self.world_line = None
+        self.debug = False  # nuevo flag para activar prints si se requiere
 
-        # Cargar textura
+        # Cargar textura (opcional)
         texture_path = os.path.join("assets", "texturas", "red.png")
         try:
             self.texture = pygame.image.load(texture_path).convert_alpha()
         except Exception as e:
-            print(f"No se pudo cargar la textura de la red: {e}")
+            print(f"[Net] No se pudo cargar la textura de la red: {e}")
             self.texture = None
 
-    
     def update(self):
-        # Línea base
+        """Actualiza las referencias lógicas de la red en coordenadas de mundo."""
         self.world_line = ((0, self.field.height / 2), (self.field.width, self.field.height / 2))
         self.rect = pygame.Rect(0, self.field.height / 2 - self.height / 2, self.field.width, self.height)
-        print("Rect red lógica:", self.rect)
-        print("Línea red debug:", self.world_line)
+
+        # Solo mostrar info si el modo debug está activo
+        if self.debug:
+            print(f"[Net] Rect red lógica: {self.rect}")
+            print(f"[Net] Línea red debug: {self.world_line}")
 
     def draw_debug(self, screen, scale, offset_x, offset_y):
+        """Dibuja una representación simple de la red en vista isométrica (modo debug)."""
         if not self.world_line:
             return
 
@@ -55,14 +58,21 @@ class Net:
         pygame.draw.line(screen, self.color, (sx1_top, sy1_top), (sx2_top, sy2_top), 2)
 
     def update_net(self, court_rect):
-        """Actualiza el rect de la red centrado en la cancha"""
+        """Actualiza el rect de la red centrado en la cancha."""
         net_w = max(4, int(court_rect.width * 0.008))
         net_h = court_rect.height
         net_x = court_rect.centerx - net_w // 2
         net_y = court_rect.y
         self.rect = pygame.Rect(net_x, net_y, net_w, net_h)
 
+        if self.debug:
+            print(f"[Net] update_net(): rect={self.rect}")
+
     def draw(self, screen):
+        """Dibuja la red (con textura si existe, o fallback sólido)."""
+        if not self.rect:
+            return
+
         if self.texture:
             tw, th = self.texture.get_size()
             scale_factor = self.rect.height / th
@@ -73,5 +83,4 @@ class Net:
             screen.blit(scaled, rect)
         else:
             pygame.draw.rect(screen, (255, 0, 0), self.rect)
-
-            
+    
