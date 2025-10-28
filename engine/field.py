@@ -46,6 +46,9 @@ def compute_offset(field_width: float, field_height: float, scale: float) -> Tup
 
 
 class Field:
+    # Alto de la "cinta" superior de la red (en píxeles de pantalla)
+    NET_TAPE_HEIGHT = 8
+
     def __init__(self, width: int, height: int, texture_path: Optional[str] = None):
         self.width = width
         self.height = height
@@ -57,10 +60,10 @@ class Field:
 
         # --- Zonas lógicas (mundo) ---
         self.zones = {
-            "back_left":  (0, 0, width, height * 0.23),
-            "front_left": (0, height * 0.23, width, height * 0.27),
+            "back_left":   (0, 0, width, height * 0.23),
+            "front_left":  (0, height * 0.23, width, height * 0.27),
             "front_right": (0, height * 0.50, width, height * 0.28),
-            "back_right": (0, height * 0.78, width, height * 0.23),
+            "back_right":  (0, height * 0.78, width, height * 0.23),
         }
 
         # Offset de centrado
@@ -71,6 +74,9 @@ class Field:
 
         # Cache de court rect del último draw
         self._last_court_rect: Optional[pygame.Rect] = None
+
+        # Debug opcional (podés setearlo desde Game)
+        self.debug = False
 
         # -------- Textura de fondo de la cancha --------
         # Soportamos ruta custom (texture_path) o tu ruta por defecto en español.
@@ -123,8 +129,7 @@ class Field:
 
     def get_net_rect(self, screen: pygame.Surface) -> pygame.Rect:
         """
-        Rect que representa la red (vertical y centrado).
-        Si luego necesitás red isométrica real, cambiaremos a colisión custom.
+        Rect que representa la red (vertical y centrado). Debe coincidir con lo que se dibuja.
         """
         court = self.get_court_rect(screen)
         net_w = max(4, int(court.width * 0.008))
@@ -132,14 +137,23 @@ class Field:
         net_x = court.centerx - net_w // 2
         net_y = court.y
         return pygame.Rect(net_x, net_y, net_w, net_h)
-        
+
+    def get_net_tape_rect(self, screen: pygame.Surface) -> pygame.Rect:
+        """
+        Sub-rect de la cinta superior de la red (para colisión diferenciada).
+        """
+        net = self.get_net_rect(screen)
+        tape_h = min(self.NET_TAPE_HEIGHT, net.height)
+        return pygame.Rect(net.left, net.top, net.width, tape_h)
 
     def draw_debug_bounds(self, surface: pygame.Surface) -> None:
-        """Overlay de depuración para ver court y red."""
+        """Overlay de depuración para ver court, red y cinta."""
         court = self.get_court_rect(surface)
         net = self.get_net_rect(surface)
-        pygame.draw.rect(surface, (30, 200, 255), court, width=2)  # contorno court
-        pygame.draw.rect(surface, (255, 80, 80), net, width=2)     # red
+        tape = self.get_net_tape_rect(surface)
+        pygame.draw.rect(surface, (30, 200, 255), court, width=2)   # contorno court
+        pygame.draw.rect(surface, (255, 80, 80), net, width=2)      # red
+        pygame.draw.rect(surface, (255, 230, 40), tape, width=2)    # cinta
 
     # ---------- Dibujo ----------
     def draw(self, screen: pygame.Surface) -> None:
@@ -187,27 +201,29 @@ class Field:
 
             # Color por tipo de zona
             color = {
-                "back_left":  (0, 255, 0),
-                "front_left": (0, 200, 255),
-                "net_zone":   (255, 255, 0),
+                "back_left":   (0, 255, 0),
+                "front_left":  (0, 200, 255),
+                "net_zone":    (255, 255, 0),
                 "front_right": (255, 100, 0),
-                "back_right": (255, 0, 0),
+                "back_right":  (255, 0, 0),
             }.get(name, (255, 255, 255))
 
             pygame.draw.polygon(screen, color, corners, 2)
 
-        #self.net.update()
-        #self.net.draw_debug(screen, SCALE, self.offset_x, self.offset_y)
+        # Actualizar y dibujar la red “visual”
         self.net.update_net(self._last_court_rect)
         self.net.draw(screen)
 
+        # Debug opcional
+        if self.debug:
+            self.draw_debug_bounds(screen)
 
     def get_net_world_line(self):
         """
         Devuelve la línea de la red en coordenadas del mundo (x, y).
         """
         return (0, self.net_y), (self.width, self.net_y)
-    
+
     def get_net_iso_line(self):
         """
         Devuelve la línea de la red en coordenadas de pantalla isométricas (píxeles).
@@ -218,19 +234,31 @@ class Field:
         p1 = to_pixels(*iso1, SCALE, self.offset_x, self.offset_y)
         p2 = to_pixels(*iso2, SCALE, self.offset_x, self.offset_y)
         return p1, p2
-    
+
     def ball_hits_net(self, ball_pos_screen: Tuple[float, float], ball_radius: float = 5.0) -> bool:
         """
         Determina si la pelota cruza la red isométrica.
-        Usa el signo del producto cruzado para detectar cambio de lado.
+        (Se mantiene por compatibilidad con lógica antigua de pruebas; la colisión principal
+         ahora la hacemos contra get_net_rect / get_net_tape_rect en Ball.update()).
         """
         (x1, y1), (x2, y2) = self.get_net_iso_line()
         bx, by = ball_pos_screen
 
-        # Distancia vertical del punto a la línea (en 2D)
+        # Distancia punto-línea en 2D
         num = abs((y2 - y1) * bx - (x2 - x1) * by + x2*y1 - y2*x1)
         den = ((y2 - y1)**2 + (x2 - x1)**2)**0.5
-        dist = num / den
+        dist = num / max(1e-6, den)
 
         # Si la pelota está a menos de cierto margen (radio) => colisión
         return dist <= ball_radius
+
+    # --------- NUEVO: helper para IN/OUT por pique ----------
+    def is_point_inside_court(self, screen: pygame.Surface, x: float, y: float, margin_px: int = 6) -> bool:
+        """
+        Indica si el punto (x, y) cae dentro del rect del court.
+        'margin_px' achica el rect para simular tolerancia a línea (4–8px recomendado).
+        """
+        court = self.get_court_rect(screen)
+        if margin_px:
+            court = court.inflate(-margin_px * 2, -margin_px * 2)
+        return court.collidepoint(int(x), int(y))
