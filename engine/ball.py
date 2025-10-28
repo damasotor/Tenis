@@ -9,6 +9,13 @@ import pygame
 
 from engine.utils.screen import screen_to_world
 
+# Helpers de colisión geométrica
+try:
+    from engine.physics.collision import circle_rect_collision, circle_rect_mtv
+except Exception:
+    circle_rect_collision = None
+    circle_rect_mtv = None
+
 TrailPoint = Tuple[int, int]
 FrameRect = Tuple[int, int, int, int]
 
@@ -38,6 +45,8 @@ class Ball(pygame.sprite.Sprite):
     - Sprite opcional; fallback a círculo
     - Trail, sombra, squash/stretch
     - Spin con efecto en trayectoria (grav extra/menos y deriva)
+    - Colisión de red realista: cinta (pasa con roce) vs cuerpo (rebota)
+    - Pique IN/OUT: decide según rect del court con margen tolerante
     """
     def __init__(self, x: int, y: int, game, vx: float = 4, vy: float = -5):
         super().__init__()
@@ -83,14 +92,18 @@ class Ball(pygame.sprite.Sprite):
         self.rect.center = (x, y)
 
         # Gravedad y rebote
-        self.gravity = 0.35     # fuerza de gravedad
+        self.gravity = 0.35        # fuerza de gravedad
         self.bounce_factor = 0.65  # energía retenida al rebotar
-        self.ground_y = game.PANTALLA.get_height() * 0.78  # altura del suelo
 
-        # ----------------- Propiedades útiles -----------------
+        # Piso real del court (sincronizado con textura/rect de Field)
+        self._ground_margin = 6  # separación pequeña para no “pegarse” a la línea
+        self.ground_y = 0  # se setea abajo
+        self._sync_ground_y()
+
+    # ----------------- Propiedades útiles -----------------
     @property
     def radius(self) -> float:
-        """Radio de la pelota (para colisiones isométricas)."""
+        """Radio de la pelota (para colisiones)."""
         return self.rect.width / 2
 
     @property
@@ -102,7 +115,6 @@ class Ball(pygame.sprite.Sprite):
     def screen_y(self) -> float:
         """Posición Y en pantalla (centro)."""
         return float(self.rect.centery)
-
 
     # ----------------- Carga sprite opcional -----------------
     def _load_sprite_or_fallback(self):
@@ -166,6 +178,18 @@ class Ball(pygame.sprite.Sprite):
         """Se llama desde Player al impactar: setea spin inicial del tiro."""
         self.spin = float(spin_value)
 
+    # ----------------- Helpers de estado -----------------
+    def _sync_ground_y(self):
+        """Sincroniza ground_y con el rect real del court (bottom - margen)."""
+        try:
+            screen = self.game.PANTALLA
+            field = self.game.field
+            court_rect = field.get_court_rect(screen)
+            self.ground_y = court_rect.bottom - self._ground_margin
+        except Exception:
+            # Fallback si algo falla
+            self.ground_y = int(self.game.PANTALLA.get_height() * 0.78)
+
     # ----------------- Helpers audio -----------------
     def _calc_pan(self) -> float:
         W = self.game.PANTALLA.get_width()
@@ -174,11 +198,12 @@ class Ball(pygame.sprite.Sprite):
 
     # ----------------- Update -----------------
     def update(self):
+        # Mantener el piso sincronizado (por si se reescala/recentra la cancha)
+        self._sync_ground_y()
+
         # Movimiento base
         self.rect.x += self.vx
         self.rect.y += self.vy
-
-        
 
         # Trail
         if self._trail_enabled:
@@ -209,7 +234,7 @@ class Ball(pygame.sprite.Sprite):
                 if frames:
                     self._frame_index = (self._frame_index + 1) % len(frames)
 
-        # ======= LÍMITES REALES DEL COURT =======
+        # ======= LÍMITES REALES DEL COURT (laterales/techo) =======
         screen = self.game.PANTALLA
         field = self.game.field
         court_rect = field.get_court_rect(screen) if hasattr(field, "get_court_rect") else screen.get_rect()
@@ -229,72 +254,98 @@ class Ball(pygame.sprite.Sprite):
             self.vy *= -1
             self._on_bounce_court()
 
-        if self.rect.bottom >= court_rect.bottom:
-            # OUT: punto para el rival del último que golpeó
-            self.rect.bottom = court_rect.bottom
-            self.on_out()
-            # Respawn al centro
-            cx, cy = screen.get_width() // 2, screen.get_height() // 2
-            self.rect.center = (cx, cy)
-            self.vx = random.choice([-5, 5])
-            self.vy = -5
-            self.spin = 0.0
-            return
+        # *** NOTA: NO hacemos OUT aquí por bottom.
+        # El pique/OUT se decide en la sección de "GRAVEDAD Y REBOTE".
 
+        # ======= RED REALISTA: cinta vs cuerpo =======
+        # Requiere que Field exponga get_net_rect() y get_net_tape_rect()
+        if hasattr(field, "get_net_rect"):
+            net_rect = field.get_net_rect(screen)
+            tape_rect = field.get_net_tape_rect(screen) if hasattr(field, "get_net_tape_rect") else net_rect
 
-        # ======= RED ISOMÉTRICA =======
-        if hasattr(field, "ball_hits_net"):
-            if field.ball_hits_net((self.screen_x, self.screen_y), self.radius):
-                self.vy *= -0.5   # Rebote vertical
-                self.vx *=  0.8   # Pequeño frenado
-                self.rect.y -= 2  # Corrección visual mínima
+            bx, by = self.rect.centerx, self.rect.centery
+            rad = max(4, self.rect.width // 2)
+            now = pygame.time.get_ticks()
+
+            def _hit(rect):
+                if circle_rect_collision:
+                    return circle_rect_collision((bx, by), rad, rect)
+                # fallback simple si no está el helper importado
+                rx = max(rect.left,  min(bx, rect.right))
+                ry = max(rect.top,   min(by, rect.bottom))
+                dx, dy = bx - rx, by - ry
+                return (dx*dx + dy*dy) <= (rad*rad)
+
+            # 1) ¿rozó la CINTA?
+            if _hit(tape_rect):
+                # Efecto “corda”: deja pasar con pérdida de energía
+                going_down = self.vy > 0
+                self.vy *= 0.4 if going_down else -0.25
+                self.vx *= 0.9
+                self.rect.y -= 1  # micro-corrección para no “pegarse”
+                if (now - self._last_net_hit) >= self._net_cd_ms and hasattr(self.game, "audio"):
+                    self.game.audio.play_sound_panned("net_tape", self._calc_pan())
+                    self._last_net_hit = now
                 self._trigger_squash()
 
-        # ======= GRAVEDAD Y REBOTE =======
+            # 2) Si no tocó cinta, ¿pegó en el CUERPO?
+            elif _hit(net_rect):
+                # Rebote amortiguado hacia atrás
+                self.vx = -self.vx * 0.6
+                self.vy = -abs(self.vy) * 0.3
+
+                # Expulsión mínima para evitar jitter
+                if circle_rect_mtv:
+                    mtv = circle_rect_mtv((bx, by), rad, net_rect)
+                    self.rect.x += int(mtv.x) if mtv and mtv.x else 0
+                    self.rect.y += int(mtv.y) if mtv and mtv.y else 0
+                else:
+                    if bx >= net_rect.centerx:
+                        self.rect.left = net_rect.right + 1
+                    else:
+                        self.rect.right = net_rect.left - 1
+
+                if (now - self._last_net_hit) >= self._net_cd_ms and hasattr(self.game, "audio"):
+                    self.game.audio.play_sound("net_body")
+                    self._last_net_hit = now
+                self._trigger_squash()
+
+        # ======= GRAVEDAD Y REBOTE (suelo) =======
         self.vy += self.gravity  # aplica gravedad
 
-        # Si toca el suelo → rebote
         if self.rect.bottom >= self.ground_y:
-            self.rect.bottom = self.ground_y
-            self.vy = -abs(self.vy) * self.bounce_factor
+            # Aseguramos contacto con el "suelo" visual real del court
+            self.rect.bottom = int(self.ground_y)
 
-            # Si el rebote es muy pequeño, lo anulamos (queda quieta)
-            if abs(self.vy) < 1.2:
-                self.vy = 0
+            # --- Decidir si el pique fue adentro/afuera ---
+            inside = False
+            if hasattr(field, "is_point_inside_court"):
+                inside = field.is_point_inside_court(screen, self.rect.centerx, self.rect.bottom, margin_px=6)
 
-        print(f"Altura de la pelota: {self.rect.bottom}")
-        x, y = screen_to_world(self.rect.centerx, self.rect.centery)
-        print(f"Altura de la pelota (mundo): {y}")
-        
-        """
-        # ======= RED =======
-        net_rect = field.get_net_rect(screen) if hasattr(field, "get_net_rect") else self._fallback_net_rect(screen)
-        if self.rect.colliderect(net_rect):
-            if abs(self.vx) < 1e-6:
-                if self.rect.centerx >= net_rect.centerx:
-                    self.rect.left = net_rect.right + 1
-                    self.vx = abs(self._min_speed)
-                else:
-                    self.rect.right = net_rect.left - 1
-                    self.vx = -abs(self._min_speed)
-            else:
-                if self.vx > 0:
-                    self.rect.right = net_rect.left - 1
-                else:
-                    self.rect.left = net_rect.right + 1
-                self.vx *= -1
+            # Overlay de pique (si existe el sistema de debug)
+            if hasattr(self.game, "debug_overlays") and self.game.debug_overlays:
+                self.game.debug_overlays.add_bounce(self.rect.centerx, self.rect.bottom, inside)
 
-            self.vy *= 0.95  # leve amortiguación
-            now = pygame.time.get_ticks()
-            if (now - self._last_net_hit) >= self._net_cd_ms:
+            if inside:
+                # Rebote normal + SFX
+                self.vy = -abs(self.vy) * self.bounce_factor
                 if hasattr(self.game, "audio"):
-                    self.game.audio.play_sound_panned("net_touch", self._calc_pan())
-                    if "crowd_ooh" in self.game.audio.sounds and random.random() < 0.4:
-                        self.game.audio.play_sound("crowd_ooh")
-                self._last_net_hit = now
+                    self.game.audio.play_sound_panned("bounce_court", self._calc_pan())
 
-            self._trigger_squash()
-        """
+                # Si el rebote ya es pequeño, la dejamos muerta
+                if abs(self.vy) < 1.2:
+                    self.vy = 0
+            else:
+                # OUT inmediato por pique
+                self.on_out()
+                # Respawn al centro
+                cx, cy = screen.get_width() // 2, screen.get_height() // 2
+                self.rect.center = (cx, cy)
+                self.vx = random.choice([-5, 5])
+                self.vy = -5
+                self.spin = 0.0
+                return
+
     # ----------------- Eventos -----------------
     def _on_bounce_court(self):
         if hasattr(self.game, "audio"):
@@ -323,15 +374,36 @@ class Ball(pygame.sprite.Sprite):
         self._trigger_squash()
 
     def on_body_hit(self):
-        # Choque con cuerpo es “error” del jugador impactado; Game se encarga del punto
+        """
+        Choque con el cuerpo de un jugador.
+        Regla: cuenta como error del último que golpeó la pelota → punto para el rival.
+        También reproducimos un rebote amortiguado (feedback visual/sonoro) y jingle de punto.
+        """
+        # Feedback inmediato
         if hasattr(self.game, "audio"):
             self.game.audio.play_sound_panned("bounce_court", self._calc_pan())
+
         DEAD_BOUNCE_FACTOR = 0.25
         self.vx *= -DEAD_BOUNCE_FACTOR
         self.vy *= -DEAD_BOUNCE_FACTOR
-        # Jingle/UI del punto (la asignación la hará Game via Player)
-        self.on_point_scored()
         self._trigger_squash()
+
+        # Jingle/UI del punto (igual que en OUT)
+        self.on_point_scored()
+
+        # Adjudicar punto según el último que golpeó
+        try:
+            last = getattr(self.game, "last_hitter", None)
+            if last == "P1":
+                self.game.point_for("P2")
+            elif last == "P2":
+                self.game.point_for("P1")
+            else:
+                # Si no sabemos quién pegó último, por defecto punto para P2
+                self.game.point_for("P2")
+        except Exception as _e:
+            # print(f"[Ball] on_body_hit sin score manager: {_e}")
+            pass
 
     def on_out(self):
         # SFX
@@ -347,7 +419,6 @@ class Ball(pygame.sprite.Sprite):
             elif last == "P2":
                 self.game.point_for("P1")
             else:
-                # Si no sabemos, darle el punto a P2 por defecto para no bloquear el flujo
                 self.game.point_for("P2")
 
     def on_point_scored(self):
@@ -362,12 +433,11 @@ class Ball(pygame.sprite.Sprite):
     def draw(self, surface: pygame.Surface):
         # Sombra
         if self._shadow_enabled:
-            # ======= Sombra proyectada =======
             # Altura real (distancia al suelo)
-            altura = max(0, self.ground_y - self.rect.bottom)
+            altura = max(0, int(self.ground_y) - self.rect.bottom)
 
             # La sombra se achica y aclara cuanto más alta está la pelota
-            scale = max(0.4, 1.0 - altura / 400.0)  # 400 px = altura “máxima” razonable
+            scale = max(0.4, 1.0 - altura / 400.0)
             alpha = int(120 * scale)
 
             shadow_w = int(self.rect.width * 1.1 * scale)
@@ -377,7 +447,7 @@ class Ball(pygame.sprite.Sprite):
             pygame.draw.ellipse(shadow, (0, 0, 0, alpha), shadow.get_rect())
 
             # La sombra se dibuja fija en el suelo (ground_y)
-            shadow_rect = shadow.get_rect(center=(self.rect.centerx, self.ground_y))
+            shadow_rect = shadow.get_rect(center=(self.rect.centerx, int(self.ground_y)))
             surface.blit(shadow, shadow_rect)
 
         # Trail
@@ -423,7 +493,7 @@ class Ball(pygame.sprite.Sprite):
         return pygame.transform.smoothscale(surf, (w, h))
 
     # Fallback net
-    """ 
+    """
     def _fallback_net_rect(self, screen) -> pygame.Rect:
         W = screen.get_width()
         H = screen.get_height()
