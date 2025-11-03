@@ -68,68 +68,14 @@ class Ball(pygame.sprite.Sprite):
         # Radio visual
         self.radio = 10
         self.image = pygame.Surface((self.radio * 2, self.radio * 2), pygame.SRCALPHA)
+        # 💡 CAMBIOS NUEVOS: Cooldown para evitar rebotes múltiples
+        self._net_cd_ms = 100        # 100 milisegundos de espera
+        self._last_net_hit = -10**9  # Inicializa el último golpe en un tiempo muy pasado
         pygame.draw.circle(self.image, (255, 255, 255), (self.radio, self.radio), self.radio)
         self.rect = self.image.get_rect()
         self.rect.center = (self.screen_x, self.screen_y)
 
-        
-        """
-        # ----------------- Física -----------------
-        # Posición y velocidad en espacio 3D
-        self.x = float(x)
-        self.y = float(y)
-        self.z = 0.0  # altura actual sobre el suelo
-        #self.vx = 4.0
-        #self.vy = 2.5  # movimiento hacia adelante en la cancha
-        #self.vz = -6.0 # impulso inicial hacia arriba
-        self.vx = vx
-        self.vy = vy
-        self._min_speed = 2.0
-        self._max_speed = 9.0
-
-        # Spin (valor escalar; + topspin, - slice). Decae cada frame.
-        self.spin = 0.0
-
-        # Cooldown para red
-        self._net_cd_ms = 90
-        self._last_net_hit = -10**9
-
-        # ----------------- Visual -----------------
-        self._use_sprite = False
-        self._sprite_sheet: Optional[pygame.Surface] = None
-        self._animations = collections.defaultdict(list)  # type: ignore
-        self._current_anim = "spin"
-        self._frame_index = 0
-        self._animator: Optional["Animator"] = Animator(default_fps=14) if Animator else None
-
-        # Sombra
-        self._shadow_enabled = True
-        self._shadow_alpha = 70
-
-        # Trail
-        self._trail_enabled = True
-        self._trail_len = 10
-        self._trail: collections.deque[TrailPoint] = collections.deque(maxlen=self._trail_len)
-
-        # Squash/Stretch
-        self._squash_timer = 0
-        self._squash_duration = 90
-        self._squash_amount = 0.20
-
-        # Imagen / rect
-        self._load_sprite_or_fallback()
-        self.rect.center = (x, y)
-
-        # Gravedad y rebote
-        self.gravity = 0.35     # fuerza de gravedad
-        self.bounce_factor = 0.65  # energía retenida al rebotar
-        self.ground_y = game.PANTALLA.get_height() * 0.78  # altura del suelo
-        
-        # Altura vertical (distancia sobre el suelo)
-        self.altura = 20.0
-        self.vz = -20.0  # velocidad vertical (eje Z)
-        self.MAX_ALTURA = 80.0
-        """
+  
 
         # ----------------- Propiedades útiles -----------------
     #@property
@@ -391,16 +337,39 @@ class Ball(pygame.sprite.Sprite):
         # Debug opcional
         #print(f"x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f}, vz={self.vz:.2f}")
 
-        #if hasattr(field.net, "ball_hits_net"):
+        #if hasattr(field.net, "si colisiona con la red"):
         #    if field.net.ball_hits_net((self.world_x, self.world_y, self.z), self.radius):
         if hasattr(self.game, "field"):
-            if self.game.field.net.ball_hits_net((self.x, self.y, self.z), self.radio):
-                # Rebote más realista
-                self.vz = abs(self.vz) * 0.5  # rebote hacia arriba
-                self.vx *= 0.8
-                self.vy *= 0.8
-                self.z += 2  # ligera corrección visual
-                print("🔴 Rebote en la red")
+        # 💡 CORRECCIÓN: Definir 'net' aquí, asegurando la indentación correcta.
+            net = self.game.field.net
+            # 1. 💡 Lógica de Cooldown: Si ya chocó recientemente, salir.
+            now = pygame.time.get_ticks()
+            if now < self._last_net_hit + self._net_cd_ms:
+                return
+
+            
+            if net.ball_hits_net((self.x, self.y, self.z), self.radio):
+
+                # 2. Activar cooldown: Registrar el golpe.
+                self._last_net_hit = now
+
+                # Detención total en el plano horizontal (x, y)
+                self.vx = 0.0 # Detiene el movimiento lateral (eje X)
+                self.vy = 0.0 # Detiene el movimiento de profundidad (eje Y)
+                self.vz *= 0.2
+                net_y_pos = net.y # 105.0, la Y central de la red.
+                CLEARANCE = 5.0 # Aumento del margen de seguridad (ej: 3 unidades)
+                net_y_pos = 105.0
+                
+                # 3. 🔑 CORRECCIÓN CRÍTICA: Reajuste Geométrico (¡No usar self.vy!)
+                if self.y > net_y_pos:
+                    # Pelota en el lado Y positivo (Jugador 1), empujar hacia afuera.
+                    self.y = net_y_pos - (self.radio + CLEARANCE) 
+                else: 
+                    # Pelota en el lado Y negativo (Jugador 2), empujar hacia afuera.
+                    self.y = net_y_pos + self.radio + CLEARANCE
+                    
+                print(f"🔴 Rebote en la red. Posición final (x,y,z): ({self.x:.2f}, {self.y:.2f}, {self.z:.2f})")
 
 
     def hit_by_player(self, player_pos: Tuple[float, float], target_zone: Optional[str] = None):

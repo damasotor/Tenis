@@ -3,7 +3,7 @@ import os
 from engine.ball import world_to_iso
 from engine.utils.screen import ALTO, ANCHO, SCALE, world_to_screen, to_pixels
 
-
+NET_OFFSET = 100.0
 
 class Net:
     def __init__(self, field, color=(255, 0, 0)):
@@ -15,7 +15,7 @@ class Net:
 
         self.width = field.width  # ancho de la cancha
         self.x = field.width / 2  # centro de la red en X
-        self.y = field.height / 2  # posición de la red en Y (mitad del campo)
+        self.y = (self.field.height / 2) + NET_OFFSET
 
         # Cargar textura
         texture_path = os.path.join("assets", "texturas", "red.png")
@@ -28,7 +28,7 @@ class Net:
     
     def update(self):
          # Desplazamiento lógico hacia jugador 1
-        NET_OFFSET = 100.0  # ajustar este valor para moveer la red adelante o atrás
+        # ajustar este valor para moveer la red adelante o atrás
         net_y = (self.field.height / 2) + NET_OFFSET
         self.y = net_y
 
@@ -39,53 +39,6 @@ class Net:
         print("Rect red lógica:", self.rect)
         print("Línea red debug:", self.world_line)
 
-    """
-    def draw_debug(self, screen, scale, offset_x, offset_y):
-        if not self.world_line:
-            return
-
-        (x1, y1), (x2, y2) = self.world_line
-
-        # Proyectar extremos base
-        iso_x1, iso_y1 = world_to_screen(x1, y1)
-        iso_x2, iso_y2 = world_to_screen(x2, y2)
-        sx1, sy1 = to_pixels(iso_x1, iso_y1, scale, offset_x, offset_y)
-        sx2, sy2 = to_pixels(iso_x2, iso_y2, scale, offset_x, offset_y)
-
-        # Dibujar línea base
-        pygame.draw.line(screen, self.color, (sx1, sy1), (sx2, sy2), 2)
-
-        # Dibujar parte superior (altura visual)
-        height_iso = self.height * scale * 2  # escala visual, ajustá según necesites
-        pygame.draw.line(screen, self.color, (sx1, sy1 - height_iso), (sx2, sy2 - height_iso), 2)
-
-
-        
-        if not self.world_line:
-            return
-
-        (x1, y1), (x2, y2) = self.world_line
-        # Base
-        iso_x1, iso_y1 = world_to_screen(x1, y1)
-        iso_x2, iso_y2 = world_to_screen(x2, y2)
-        sx1, sy1 = to_pixels(iso_x1, iso_y1, scale, offset_x, offset_y)
-        sx2, sy2 = to_pixels(iso_x2, iso_y2, scale, offset_x, offset_y)
-
-        # Superior (debug)
-        vertical_shift = self.height
-        horizontal_shift = 1.0
-        x1_top = x1 - horizontal_shift
-        y1_top = y1 - vertical_shift
-        x2_top = x2 - horizontal_shift
-        y2_top = y2 - vertical_shift
-        iso_x1_top, iso_y1_top = world_to_screen(x1_top, y1_top)
-        iso_x2_top, iso_y2_top = world_to_screen(x2_top, y2_top)
-        sx1_top, sy1_top = to_pixels(iso_x1_top, iso_y1_top, scale, offset_x, offset_y)
-        sx2_top, sy2_top = to_pixels(iso_x2_top, iso_y2_top, scale, offset_x, offset_y)
-
-        pygame.draw.line(screen, self.color, (sx1, sy1), (sx2, sy2), 2)
-        pygame.draw.line(screen, self.color, (sx1_top, sy1_top), (sx2_top, sy2_top), 2)
-        """
     def draw_debug(self, screen):
         """Dibuja el área de colisión de la red para depuración."""
         color = (255, 0, 0)  # rojo para debug
