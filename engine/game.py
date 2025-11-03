@@ -521,6 +521,7 @@ class Game:
 
         if self._debug_bounds:
             self.field.draw_debug_bounds(self.PANTALLA)
+            self.field.net.draw_debug(self.PANTALLA)
 
         # Pelotas con efectos propios (trail/sombra/squash)
         for b in self.balls:
@@ -538,6 +539,21 @@ class Game:
         # HUD de puntuación
         if self.score:
             self.score.draw_hud(self.PANTALLA, self.font_hud)
+
+        #if self._debug_bounds:
+            # Dibuja la red lógica
+            #net = self.field.net
+            #if hasattr(net, "rect"):
+                #pygame.draw.rect(self.PANTALLA, (0, 200, 255), net.rect, width=2)
+            #if hasattr(net, "collision_rect"):
+                #pygame.draw.rect(self.PANTALLA, (255, 0, 255), net.collision_rect, width=2)
+
+            # Dibuja pelota (posición real y proyectada)
+            #for b in self.balls:
+            #    pygame.draw.circle(self.PANTALLA, (0, 255, 0),
+            #                    (int(b.screen_x), int(b.screen_y)), 6, width=1)
+            #    pygame.draw.circle(self.PANTALLA, (255, 255, 0),
+            #                    (int(b.x), int(b.y)), 4, width=1)
 
     def _render_victoria(self):
         # Fondo tenue del ingame + cartel
@@ -571,6 +587,7 @@ class Game:
         self.balls.add(ball)
         self._ball_main = ball
         ball.start_rally()
+        ball.launch_toward_random_zone()
         self.last_hitter = None
 
         # Vincular a la IA si existe

@@ -7,7 +7,7 @@ from typing import Optional, List, Tuple
 
 import pygame
 
-from engine.utils.screen import screen_to_world
+from engine.utils.screen import ALTO, ANCHO, screen_to_world
 
 TrailPoint = Tuple[int, int]
 FrameRect = Tuple[int, int, int, int]
@@ -31,6 +31,19 @@ try:
 except Exception:
     SPIN_GRAVITY_SCALE, SPIN_DRIFT_SCALE, SPIN_DECAY = 0.12, 0.06, 0.96
 
+def world_to_iso(x: float, y: float, z: float = 0.0) -> Tuple[float, float]:
+    """
+    Convierte coordenadas del mundo (x, y, z) a coordenadas de pantalla isométricas.
+    """
+    iso_x = x - y
+    iso_y = (x + y) * 0.5 - z
+    return iso_x, iso_y
+
+# Parámetros físicos
+GRAVEDAD = -0.5
+COEF_REBOTE = 0.7
+FACTOR_ISO_X = 0.5   # qué tanto se "desplaza" la sombra en X por altura
+FACTOR_ISO_Y = 0.3   # qué tanto se "desplaza" la sombra en Y por altura
 
 class Ball(pygame.sprite.Sprite):
     """
@@ -39,11 +52,36 @@ class Ball(pygame.sprite.Sprite):
     - Trail, sombra, squash/stretch
     - Spin con efecto en trayectoria (grav extra/menos y deriva)
     """
-    def __init__(self, x: int, y: int, game, vx: float = 4, vy: float = -5):
+    def __init__(self, x: int, y: int, game, vx: float, vy: float):
         super().__init__()
         self.game = game
 
+        # Posición base (x, y) en el suelo
+        self.x = x
+        self.y = y
+        # Altura en el eje vertical (z)
+        self.z = 80
+        # Velocidades
+        self.vx = random.choice([-5, 5])
+        self.vy = random.choice([-2, 2])
+        self.vz = 0
+        # Radio visual
+        self.radio = 10
+        self.image = pygame.Surface((self.radio * 2, self.radio * 2), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, (255, 255, 255), (self.radio, self.radio), self.radio)
+        self.rect = self.image.get_rect()
+        self.rect.center = (self.screen_x, self.screen_y)
+
+        
+        """
         # ----------------- Física -----------------
+        # Posición y velocidad en espacio 3D
+        self.x = float(x)
+        self.y = float(y)
+        self.z = 0.0  # altura actual sobre el suelo
+        #self.vx = 4.0
+        #self.vy = 2.5  # movimiento hacia adelante en la cancha
+        #self.vz = -6.0 # impulso inicial hacia arriba
         self.vx = vx
         self.vy = vy
         self._min_speed = 2.0
@@ -86,22 +124,39 @@ class Ball(pygame.sprite.Sprite):
         self.gravity = 0.35     # fuerza de gravedad
         self.bounce_factor = 0.65  # energía retenida al rebotar
         self.ground_y = game.PANTALLA.get_height() * 0.78  # altura del suelo
+        
+        # Altura vertical (distancia sobre el suelo)
+        self.altura = 20.0
+        self.vz = -20.0  # velocidad vertical (eje Z)
+        self.MAX_ALTURA = 80.0
+        """
 
         # ----------------- Propiedades útiles -----------------
-    @property
-    def radius(self) -> float:
-        """Radio de la pelota (para colisiones isométricas)."""
-        return self.rect.width / 2
+    #@property
+    #def radius(self) -> float:
+    #    """Radio de la pelota (para colisiones isométricas)."""
+    #    return self.rect.width / 2
 
+    #@property
+    #def screen_x(self) -> float:
+    #    """Posición X en pantalla (centro)."""
+    #    return float(self.rect.centerx)
+
+    #@property
+    #def screen_y(self) -> float:
+    #    """Posición Y en pantalla (centro)."""
+    #    return float(self.rect.centery)
     @property
     def screen_x(self) -> float:
-        """Posición X en pantalla (centro)."""
-        return float(self.rect.centerx)
+        iso_x, iso_y = world_to_iso(self.x, self.y, self.z)
+        # centramos en la pantalla
+        return iso_x + ANCHO // 2
 
     @property
     def screen_y(self) -> float:
-        """Posición Y en pantalla (centro)."""
-        return float(self.rect.centery)
+        iso_x, iso_y = world_to_iso(self.x, self.y, self.z)
+        # bajamos un poco para centrar cancha visualmente
+        return iso_y + ALTO // 3
 
 
     # ----------------- Carga sprite opcional -----------------
@@ -172,129 +227,53 @@ class Ball(pygame.sprite.Sprite):
         x = self.rect.centerx
         return (x / max(1, W)) * 2.0 - 1.0
 
-    # ----------------- Update -----------------
-    def update(self):
-        # Movimiento base
-        self.rect.x += self.vx
-        self.rect.y += self.vy
 
-        
-
-        # Trail
-        if self._trail_enabled:
-            self._trail.append((self.rect.centerx, self.rect.centery))
-
-        # Spin effect → modifica trayectoria
-        if abs(self.spin) > 1e-3:
-            # Aceleración vertical por spin (topspin “empuja” hacia abajo; slice hacia arriba)
-            self.vy += self.spin * SPIN_GRAVITY_SCALE
-            # Deriva lateral leve (dirección según signo de spin y sentido de avance)
-            drift_dir = 1 if self.vx >= 0 else -1
-            self.vx += (self.spin * SPIN_DRIFT_SCALE) * drift_dir
-            # Decaimiento
-            self.spin *= SPIN_DECAY
-
-        # Velocidades mín/máx
-        if 0 < abs(self.vx) < self._min_speed:
-            self.vx = self._min_speed * (1 if self.vx >= 0 else -1)
-        if 0 < abs(self.vy) < self._min_speed:
-            self.vy = self._min_speed * (1 if self.vy >= 0 else -1)
-        self.vx = max(-self._max_speed, min(self._max_speed, self.vx))
-        self.vy = max(-self._max_speed, min(self._max_speed, self.vy))
-
-        # Animator por tiempo
-        if self._use_sprite and self._animator and self._current_anim in self._animations:
-            if self._animator.update(self._current_anim):
-                frames = self._animations[self._current_anim]
-                if frames:
-                    self._frame_index = (self._frame_index + 1) % len(frames)
-
-        # ======= LÍMITES REALES DEL COURT =======
-        screen = self.game.PANTALLA
-        field = self.game.field
-        court_rect = field.get_court_rect(screen) if hasattr(field, "get_court_rect") else screen.get_rect()
-
-        if self.rect.left <= court_rect.left:
-            self.rect.left = court_rect.left
-            self.vx *= -1
-            self._on_bounce_court()
-
-        if self.rect.right >= court_rect.right:
-            self.rect.right = court_rect.right
-            self.vx *= -1
-            self._on_bounce_court()
-
-        if self.rect.top <= court_rect.top:
-            self.rect.top = court_rect.top
-            self.vy *= -1
-            self._on_bounce_court()
-
-        if self.rect.bottom >= court_rect.bottom:
-            # OUT: punto para el rival del último que golpeó
-            self.rect.bottom = court_rect.bottom
-            self.on_out()
-            # Respawn al centro
-            cx, cy = screen.get_width() // 2, screen.get_height() // 2
-            self.rect.center = (cx, cy)
-            self.vx = random.choice([-5, 5])
-            self.vy = -5
-            self.spin = 0.0
-            return
-
-
-        # ======= RED ISOMÉTRICA =======
-        if hasattr(field, "ball_hits_net"):
-            if field.ball_hits_net((self.screen_x, self.screen_y), self.radius):
-                self.vy *= -0.5   # Rebote vertical
-                self.vx *=  0.8   # Pequeño frenado
-                self.rect.y -= 2  # Corrección visual mínima
-                self._trigger_squash()
-
-        # ======= GRAVEDAD Y REBOTE =======
-        self.vy += self.gravity  # aplica gravedad
-
-        # Si toca el suelo → rebote
-        if self.rect.bottom >= self.ground_y:
-            self.rect.bottom = self.ground_y
-            self.vy = -abs(self.vy) * self.bounce_factor
-
-            # Si el rebote es muy pequeño, lo anulamos (queda quieta)
-            if abs(self.vy) < 1.2:
-                self.vy = 0
-
-        print(f"Altura de la pelota: {self.rect.bottom}")
-        x, y = screen_to_world(self.rect.centerx, self.rect.centery)
-        print(f"Altura de la pelota (mundo): {y}")
-        
+    def launch_toward_zone(self, zone: str = None, speed: float = 5.0):
         """
-        # ======= RED =======
-        net_rect = field.get_net_rect(screen) if hasattr(field, "get_net_rect") else self._fallback_net_rect(screen)
-        if self.rect.colliderect(net_rect):
-            if abs(self.vx) < 1e-6:
-                if self.rect.centerx >= net_rect.centerx:
-                    self.rect.left = net_rect.right + 1
-                    self.vx = abs(self._min_speed)
-                else:
-                    self.rect.right = net_rect.left - 1
-                    self.vx = -abs(self._min_speed)
-            else:
-                if self.vx > 0:
-                    self.rect.right = net_rect.left - 1
-                else:
-                    self.rect.left = net_rect.right + 1
-                self.vx *= -1
-
-            self.vy *= 0.95  # leve amortiguación
-            now = pygame.time.get_ticks()
-            if (now - self._last_net_hit) >= self._net_cd_ms:
-                if hasattr(self.game, "audio"):
-                    self.game.audio.play_sound_panned("net_touch", self._calc_pan())
-                    if "crowd_ooh" in self.game.audio.sounds and random.random() < 0.4:
-                        self.game.audio.play_sound("crowd_ooh")
-                self._last_net_hit = now
-
-            self._trigger_squash()
+        Lanza la pelota hacia una zona del campo rival (izquierda, centro, derecha).
+        Si no se indica zona, elige una aleatoria.
         """
+        if zone is None:
+            zone = random.choice(["izquierda", "centro", "derecha"])
+
+        # Dirección base (en coordenadas del mundo, no pantalla)
+        if zone == "izquierda":
+            dir_x, dir_y = -1, 1   # hacia arriba-izquierda en mundo (fondo izq)
+        elif zone == "derecha":
+            dir_x, dir_y = 1, 1    # hacia abajo-derecha en mundo (fondo der)
+        else:
+            dir_x, dir_y = 0, 1    # recto al fondo
+
+        # Normalizamos para que la velocidad total sea "speed"
+        length = (dir_x**2 + dir_y**2) ** 0.5
+        self.vx = (dir_x / length) * speed
+        self.vy = (dir_y / length) * speed
+
+        # Pequeño impulso inicial en altura
+        self.vz = speed * 0.6
+        print(f"[DEBUG] Lanzamiento hacia {zone}: vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
+    
+    def launch_toward_random_zone(self):
+        # Zonas dentro de la cancha (en coordenadas del espacio 3D)
+        zones = [
+            (random.uniform(100, 400), random.uniform(100, 200)),  # izquierda-delantera
+            (random.uniform(400, 700), random.uniform(100, 200)),  # derecha-delantera
+            (random.uniform(100, 400), random.uniform(300, 500)),  # izquierda-fondo
+            (random.uniform(400, 700), random.uniform(300, 500)),  # derecha-fondo
+        ]
+        target_x, target_y = random.choice(zones)
+
+        dx = target_x - self.x
+        dy = target_y - self.y
+        dist = (dx ** 2 + dy ** 2) ** 0.5
+
+        # Escalar velocidades para un vuelo natural
+        self.vx = dx / dist * random.uniform(4.5, 6.0)
+        self.vy = dy / dist * random.uniform(4.5, 6.0)
+        self.vz = -random.uniform(6.0, 9.0)
+
+        print(f"Lanzando hacia zona ({target_x:.1f}, {target_y:.1f}) con vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
+    
     # ----------------- Eventos -----------------
     def _on_bounce_court(self):
         if hasattr(self.game, "audio"):
@@ -358,78 +337,106 @@ class Ball(pygame.sprite.Sprite):
                 self.game.audio.play_sound("crowd_ooh")
             self.game.audio.unduck_music()
 
-    # ----------------- Draw -----------------
-    def draw(self, surface: pygame.Surface):
-        # Sombra
-        if self._shadow_enabled:
-            # ======= Sombra proyectada =======
-            # Altura real (distancia al suelo)
-            altura = max(0, self.ground_y - self.rect.bottom)
 
-            # La sombra se achica y aclara cuanto más alta está la pelota
-            scale = max(0.4, 1.0 - altura / 400.0)  # 400 px = altura “máxima” razonable
-            alpha = int(120 * scale)
+    def update(self):
+        # ===== Movimiento en el mundo =====
+        self.x += self.vx
+        self.y += self.vy
+        self.z += self.vz
 
-            shadow_w = int(self.rect.width * 1.1 * scale)
-            shadow_h = max(3, int(self.rect.height * 0.25 * scale))
+        # Gravedad y rebote vertical
+        self.vz -= 0.5  # gravedad
+        if self.z <= 0:
+            self.z = 0
+            self.vz = -self.vz * 0.7  # rebote amortiguado
+            if abs(self.vz) < 0.8:
+                self.vz = 0
 
-            shadow = pygame.Surface((shadow_w, shadow_h), pygame.SRCALPHA)
-            pygame.draw.ellipse(shadow, (0, 0, 0, alpha), shadow.get_rect())
+        # ===== Límites del campo =====
+        FIELD_LEFT = -200
+        FIELD_RIGHT = 200
+        FIELD_TOP = -300
+        FIELD_BOTTOM = 300
 
-            # La sombra se dibuja fija en el suelo (ground_y)
-            shadow_rect = shadow.get_rect(center=(self.rect.centerx, self.ground_y))
-            surface.blit(shadow, shadow_rect)
+        # Rebote horizontal (izq-der)
+        if self.x < FIELD_LEFT:
+            self.x = FIELD_LEFT
+            self.vx *= -1
+        elif self.x > FIELD_RIGHT:
+            self.x = FIELD_RIGHT
+            self.vx *= -1
 
-        # Trail
-        if self._trail_enabled and len(self._trail) > 1:
-            for i in range(1, len(self._trail)):
-                x1, y1 = self._trail[i-1]
-                x2, y2 = self._trail[i]
-                a = int(180 * (i / len(self._trail)))
-                col = (255, 255, 255, max(20, min(200, a)))
-                seg = pygame.Surface((max(1, abs(x2-x1) + 2), max(1, abs(y2-y1) + 2)), pygame.SRCALPHA)
-                pygame.draw.line(seg, col, (1, 1), (x2 - x1 + 1, y2 - y1 + 1), 2)
-                surface.blit(seg, (min(x1, x2) - 1, min(y1, y2) - 1))
+        # Rebote profundidad (delante-atrás)
+        if self.y < FIELD_TOP:
+            self.y = FIELD_TOP
+            self.vy *= -1
+        elif self.y > FIELD_BOTTOM:
+            self.y = FIELD_BOTTOM
+            self.vy *= +1
 
-        # Pelota
-        if self._use_sprite and self._sprite_sheet and self._current_anim in self._animations:
-            frames = self._animations[self._current_anim]
-            if frames:
-                self._frame_index %= len(frames)
-                fx, fy, fw, fh = frames[self._frame_index]
-                frame = self._sprite_sheet.subsurface(pygame.Rect(fx, fy, fw, fh))
-                frame_to_draw = self._apply_squash(frame)
-                surface.blit(frame_to_draw, frame_to_draw.get_rect(center=self.rect.center))
-                return
+        # ===== Convertir a pantalla =====
+        iso_x, iso_y = world_to_iso(self.x, self.y, self.z)
+        self.rect.center = (iso_x + ANCHO // 2, iso_y + ALTO // 3)
 
-        # Fallback: círculo
-        r = self.rect.width // 2
-        temp = pygame.Surface(self.rect.size, pygame.SRCALPHA)
-        pygame.draw.circle(temp, (250, 250, 250), (r, r), r)
-        temp = self._apply_squash(temp)
-        surface.blit(temp, temp.get_rect(center=self.rect.center))
+    def draw(self, screen):
+        # Sombra proyectada (más cerca del suelo)
+        sombra_x, sombra_y = world_to_iso(self.x, self.y, 0)
+        sombra_x += ANCHO // 2
+        sombra_y += ALTO // 3
+        pygame.draw.circle(screen, (50, 50, 50), (int(sombra_x), int(sombra_y)), self.radio)
 
-    def _apply_squash(self, surf: pygame.Surface) -> pygame.Surface:
-        if self._squash_timer <= 0:
-            return surf
-        # decaimiento por frame básico
-        self._squash_timer = max(0, self._squash_timer - (1000 // max(30, 60)))
-        t = self._squash_timer / max(1, self._squash_duration)
-        amt = self._squash_amount * t
-        sx = 1.0 + (amt if abs(self.vx) > abs(self.vy) else -amt)
-        sy = 1.0 + (amt if abs(self.vy) > abs(self.vx) else -amt)
-        w = max(2, int(surf.get_width() * sx))
-        h = max(2, int(surf.get_height() * sy))
-        return pygame.transform.smoothscale(surf, (w, h))
+        # Pelota (más alta según z)
+        px, py = self.screen_x, self.screen_y
+        pygame.draw.circle(screen, (255, 255, 0), (int(px), int(py)), self.radio)
+        # Debug opcional
+        #print(f"x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f}, vz={self.vz:.2f}")
 
-    # Fallback net
-    """ 
-    def _fallback_net_rect(self, screen) -> pygame.Rect:
-        W = screen.get_width()
-        H = screen.get_height()
-        net_w = 6
-        net_h = int(H * 0.6)
-        net_x = (W - net_w) // 2
-        net_y = (H - net_h) // 2
-        return pygame.Rect(net_x, net_y, net_w, net_h)
-    """
+        #if hasattr(field.net, "ball_hits_net"):
+        #    if field.net.ball_hits_net((self.world_x, self.world_y, self.z), self.radius):
+        if hasattr(self.game, "field"):
+            if self.game.field.net.ball_hits_net((self.x, self.y, self.z), self.radio):
+                # Rebote más realista
+                self.vz = abs(self.vz) * 0.5  # rebote hacia arriba
+                self.vx *= 0.8
+                self.vy *= 0.8
+                self.z += 2  # ligera corrección visual
+                print("🔴 Rebote en la red")
+
+
+    def hit_by_player(self, player_pos: Tuple[float, float], target_zone: Optional[str] = None):
+        """
+        Simula el golpe de un jugador con opción de apuntar a una zona del campo rival.
+        target_zone puede ser: 'left', 'center' o 'right'
+        """
+        print(f"🎾 Pelota golpeada desde {player_pos}")
+
+        bx, by = self.x, self.y
+
+        # Determinar hacia qué lado va el golpe
+        if player_pos[1] > by:
+            # Jugador 1 (abajo) golpea → apuntar al campo superior
+            side = "top"
+        else:
+            side = "bottom"
+
+        # Si tenés acceso al campo, usalo
+        if hasattr(self.game, "field"):
+            tx, ty = self.game.field.get_target_zone(side, target_zone or "center")
+        else:
+            # fallback simple si no hay field
+            tx, ty = bx + random.uniform(-200, 200), by + (-200 if side == "top" else 200)
+
+        # Vector de dirección
+        dx = tx - bx
+        dy = ty - by
+        dist = max((dx**2 + dy**2) ** 0.5, 1)
+        dir_x, dir_y = dx / dist, dy / dist
+
+        # Velocidad y altura
+        speed = random.uniform(7, 9)
+        self.vx = dir_x * speed
+        self.vy = dir_y * speed
+        self.vz = random.uniform(7, 9)
+
+        print(f"📍 Objetivo {side}-{target_zone or 'center'} → ({tx:.1f}, {ty:.1f})")
+        print(f"📐 Dirección: vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")

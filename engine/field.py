@@ -1,9 +1,12 @@
 import os
+import random
 from typing import Optional, Tuple
 
 import pygame
 
+from engine.ball import world_to_iso
 from engine.net import Net
+from engine.utils import screen
 from engine.utils.screen import to_pixels, world_to_screen, ANCHO, ALTO, SCALE
 
 # Loader de texturas con fallback seguro
@@ -46,7 +49,7 @@ def compute_offset(field_width: float, field_height: float, scale: float) -> Tup
 
 
 class Field:
-    def __init__(self, width: int, height: int, texture_path: Optional[str] = None):
+    def __init__(self, width: int = 800, height: int = 600, texture_path: Optional[str] = None):
         self.width = width
         self.height = height
 
@@ -133,13 +136,45 @@ class Field:
         net_y = court.y
         return pygame.Rect(net_x, net_y, net_w, net_h)
         
-
+    def get_bounds(self) -> Tuple[float, float, float, float]:
+        """Devuelve los límites del campo en unidades del mundo (coherente con la escala)"""
+        # factor de escala: del Field lógico a mundo “real”
+        scale_x = 800 / self.width
+        scale_y = 600 / self.height
+        return 0, self.width * scale_x, 0, self.height * scale_y
+    
     def draw_debug_bounds(self, surface: pygame.Surface) -> None:
         """Overlay de depuración para ver court y red."""
         court = self.get_court_rect(surface)
-        net = self.get_net_rect(surface)
+        #net = self.get_net_rect(surface)
         pygame.draw.rect(surface, (30, 200, 255), court, width=2)  # contorno court
-        pygame.draw.rect(surface, (255, 80, 80), net, width=2)     # red
+        pygame.draw.rect(surface, (255, 0, 0), (0, 0, self.width, self.height), 2)
+        #pygame.draw.rect(surface, (255, 80, 80), net, width=2)     # red
+
+    def get_target_zone(self, side, zone="center"):
+        """Devuelve coordenada dentro de una zona, en unidades de Field (lógicas)"""
+        mid_x = self.width / 2
+        mid_y = self.height / 2
+
+        # Dividimos el Field en tercios
+        left_range   = (0, mid_x - mid_x / 3)
+        center_range = (mid_x - mid_x / 3, mid_x + mid_x / 3)
+        right_range  = (mid_x + mid_x / 3, self.width)
+
+        if zone == "left":
+            rx = random.uniform(*left_range)
+        elif zone == "right":
+            rx = random.uniform(*right_range)
+        else:
+            rx = random.uniform(*center_range)
+
+        # Y según el lado del oponente
+        if side == "top":
+            ry = random.uniform(0, mid_y)
+        else:
+            ry = random.uniform(mid_y, self.height)
+
+        return rx, ry
 
     # ---------- Dibujo ----------
     def draw(self, screen: pygame.Surface) -> None:
@@ -234,3 +269,43 @@ class Field:
 
         # Si la pelota está a menos de cierto margen (radio) => colisión
         return dist <= ball_radius
+    
+
+    def draw_debug_full(self, surface: pygame.Surface, ball=None, show_target=True):
+        """
+        Dibuja overlay de depuración completo:
+        - Cancha (contorno)
+        - Red
+        - Límites de la cancha
+        - Pelota y objetivo (si se pasa)
+        """
+        # --- Contorno de la cancha ---
+        court = self.get_court_rect(surface)
+        pygame.draw.rect(surface, (30, 200, 255), court, width=2)  # azul
+
+        # --- Límites reales de la cancha (en world coords) ---
+        left, top = 0, 0
+        right, bottom = self.width, self.height
+        corners = [
+            world_to_iso(left, top),
+            world_to_iso(right, top),
+            world_to_iso(right, bottom),
+            world_to_iso(left, bottom),
+        ]
+        corners_px = [(x + ANCHO // 2, y + ALTO // 3) for x, y in corners]
+        pygame.draw.polygon(surface, (255, 255, 0), corners_px, width=2)  # amarillo
+
+        # --- Red ---
+        self.net.draw_debug(surface)
+
+        # --- Pelota y objetivo ---
+        if ball:
+            # Pelota
+            px, py = ball.screen_x, ball.screen_y
+            pygame.draw.circle(surface, (255, 255, 0), (int(px), int(py)), ball.radio)
+
+            # Objetivo
+            if show_target and hasattr(ball, "_target_pos"):
+                tx, ty = ball._target_pos
+                pygame.draw.circle(surface, (0, 255, 0), (int(tx), int(ty)), 5)
+                pygame.draw.line(surface, (0, 255, 0), (px, py), (tx, ty), 1)
