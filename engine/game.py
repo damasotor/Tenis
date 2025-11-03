@@ -30,8 +30,8 @@ class Game:
 
         # Mundo
         self.field = Field(6, 10)
-        self.jugador1 = Player(ANCHO / 3 + 185, ALTO / 2 - 25,  field=self.field, jugador2=False)
-        self.jugador2 = Player(ANCHO / 3 + 185, ALTO / 2 - 450, field=self.field, jugador2=True)
+        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False)# >x = Más a la derecha, >y = Más atrás
+        self.jugador2 = Player(385, ALTO / 2 - 450, field=self.field, jugador2=True)
 
         # Reloj
         self.reloj = pygame.time.Clock()
@@ -581,7 +581,7 @@ class Game:
     # ---------------------------
     def _start_new_rally(self):
         """Crea una pelota al centro y dispara el saque."""
-        cx, cy = self.PANTALLA.get_width() // 2, self.PANTALLA.get_height() // 2
+        cx, cy = 150,350
         self.balls.empty()
         ball = Ball(cx, cy, game=self, vx=5, vy=-5)
         self.balls.add(ball)

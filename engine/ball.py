@@ -353,26 +353,15 @@ class Ball(pygame.sprite.Sprite):
                 self.vz = 0
 
         # ===== Límites del campo =====
-        FIELD_LEFT = -200
-        FIELD_RIGHT = 200
-        FIELD_TOP = -300
-        FIELD_BOTTOM = 300
+        FIELD_LEFT = -50
+        FIELD_RIGHT = 250
+        FIELD_TOP = -150
+        FIELD_BOTTOM = 350
 
-        # Rebote horizontal (izq-der)
-        if self.x < FIELD_LEFT:
-            self.x = FIELD_LEFT
-            self.vx *= -1
-        elif self.x > FIELD_RIGHT:
-            self.x = FIELD_RIGHT
-            self.vx *= -1
-
-        # Rebote profundidad (delante-atrás)
-        if self.y < FIELD_TOP:
-            self.y = FIELD_TOP
-            self.vy *= -1
-        elif self.y > FIELD_BOTTOM:
-            self.y = FIELD_BOTTOM
-            self.vy *= +1
+        #Si se sale de la cancha, punto
+        if self.x < FIELD_LEFT or self.x > FIELD_RIGHT or self.y < FIELD_TOP or self.y > FIELD_BOTTOM:
+            self.out_of_bounds = True
+            print("🎾 Pelota fuera de la cancha!")
 
         # ===== Convertir a pantalla =====
         iso_x, iso_y = world_to_iso(self.x, self.y, self.z)

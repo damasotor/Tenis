@@ -49,7 +49,7 @@ def compute_offset(field_width: float, field_height: float, scale: float) -> Tup
 
 
 class Field:
-    def __init__(self, width: int = 800, height: int = 600, texture_path: Optional[str] = None):
+    def __init__(self, width: int, height: int, texture_path: Optional[str] = None):
         self.width = width
         self.height = height
 
@@ -152,15 +152,21 @@ class Field:
         #pygame.draw.rect(surface, (255, 80, 80), net, width=2)     # red
 
     def get_target_zone(self, side, zone="center"):
-        """Devuelve coordenada dentro de una zona, en unidades de Field (lógicas)"""
+        """
+        Devuelve una coordenada (x, y) dentro del campo, en UNIDADES del Field (no píxeles).
+        side: 'top' o 'bottom'
+        zone: 'left', 'center' o 'right'
+        """
+
         mid_x = self.width / 2
         mid_y = self.height / 2
 
-        # Dividimos el Field en tercios
+        # Dividimos el ancho del campo en 3 zonas
         left_range   = (0, mid_x - mid_x / 3)
         center_range = (mid_x - mid_x / 3, mid_x + mid_x / 3)
         right_range  = (mid_x + mid_x / 3, self.width)
 
+        # Elegimos X según zona
         if zone == "left":
             rx = random.uniform(*left_range)
         elif zone == "right":
@@ -168,11 +174,11 @@ class Field:
         else:
             rx = random.uniform(*center_range)
 
-        # Y según el lado del oponente
+        # Elegimos Y según el lado opuesto del jugador
         if side == "top":
-            ry = random.uniform(0, mid_y)
+            ry = random.uniform(0.5, mid_y - 0.5)
         else:
-            ry = random.uniform(mid_y, self.height)
+            ry = random.uniform(mid_y + 0.5, self.height - 0.5)
 
         return rx, ry
 
