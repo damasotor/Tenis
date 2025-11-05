@@ -5,7 +5,7 @@ import pygame
 from engine.player import Player
 from engine.field import Field
 from engine.utils.colors import AZUL_OSCURO, BLANCO
-from engine.utils.screen import ANCHO, ALTO
+from engine.utils.screen import ANCHO, ALTO, world_to_screen
 from engine.audio import AudioManager
 from engine.ball import Ball
 
@@ -42,8 +42,8 @@ class Game:
 
         # Mundo
         self.field = Field(6, 10)
-        self.jugador1 = Player(ANCHO / 3 + 185, ALTO / 2 - 25,  field=self.field, jugador2=False)
-        self.jugador2 = Player(ANCHO / 3 + 185, ALTO / 2 - 450, field=self.field, jugador2=True)
+        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False)# >x = Más a la derecha, >y = Más atrás
+        self.jugador2 = Player(385, ALTO / 2 - 450, field=self.field, jugador2=True)
 
         # Reloj
         self.reloj = pygame.time.Clock()
@@ -618,9 +618,10 @@ class Game:
     # Rally / PUNTUACIÓN
     # ---------------------------
     def _start_new_rally(self):
-        cx, cy = self.PANTALLA.get_width() // 2, self.PANTALLA.get_height() // 2
+        cx, cy = self.jugador1.x, self.jugador1.y
+        wx, wy = world_to_screen(cx, cy)
         self.balls.empty()
-        ball = Ball(cx, cy, game=self, vx=5, vy=-5)
+        ball = Ball(wx + 15, wy, game=self, vx=5, vy=-5)
         self.balls.add(ball)
         self._ball_main = ball
         ball.start_rally()

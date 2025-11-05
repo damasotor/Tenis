@@ -339,26 +339,15 @@ class Ball(pygame.sprite.Sprite):
                 self.vz = 0
 
         # ===== Límites del campo =====
-        FIELD_LEFT = -200
-        FIELD_RIGHT = 200
-        FIELD_TOP = -300
-        FIELD_BOTTOM = 300
+        FIELD_LEFT = -50
+        FIELD_RIGHT = 250
+        FIELD_TOP = -150
+        FIELD_BOTTOM = 350
 
-        # Rebote horizontal (izq-der)
-        if self.x < FIELD_LEFT:
-            self.x = FIELD_LEFT
-            self.vx *= -1
-        elif self.x > FIELD_RIGHT:
-            self.x = FIELD_RIGHT
-            self.vx *= -1
-
-        # Rebote profundidad (delante-atrás)
-        if self.y < FIELD_TOP:
-            self.y = FIELD_TOP
-            self.vy *= -1
-        elif self.y > FIELD_BOTTOM:
-            self.y = FIELD_BOTTOM
-            self.vy *= +1
+        #Si se sale de la cancha, punto
+        if self.x < FIELD_LEFT or self.x > FIELD_RIGHT or self.y < FIELD_TOP or self.y > FIELD_BOTTOM:
+            self.out_of_bounds = True
+            print("🎾 Pelota fuera de la cancha!")
 
         # ===== Convertir a pantalla =====
         iso_x, iso_y = world_to_iso(self.x, self.y, self.z)
@@ -412,40 +401,32 @@ class Ball(pygame.sprite.Sprite):
                 print(f"🔴 Rebote en la red. Posición final (x,y,z): ({self.x:.2f}, {self.y:.2f}, {self.z:.2f})")
 
 
-    def hit_by_player(self, player_pos: Tuple[float, float], target_zone: Optional[str] = None):
-        """
-        Simula el golpe de un jugador con opción de apuntar a una zona del campo rival.
-        target_zone puede ser: 'left', 'center' o 'right'
-        """
-        print(f"🎾 Pelota golpeada desde {player_pos}")
-
-        bx, by = self.x, self.y
-
-        # Determinar hacia qué lado va el golpe
-        if player_pos[1] > by:
-            # Jugador 1 (abajo) golpea → apuntar al campo superior
-            side = "top"
+    def hit_by_player(self, player_pos, zone="center", is_player2=False):
+        field = self.game.field
+        
+        if zone not in field.zones:
+            print(f"[⚠️] Zona '{zone}' no encontrada, usando centro por defecto.")
+            target_x, target_y = 0, 0
         else:
-            side = "bottom"
+            zx, zy, zw, zh = field.zones[zone]
 
-        # Si tenés acceso al campo, usalo
-        if hasattr(self.game, "field"):
-            tx, ty = self.game.field.get_target_zone(side, target_zone or "center")
-        else:
-            # fallback simple si no hay field
-            tx, ty = bx + random.uniform(-200, 200), by + (-200 if side == "top" else 200)
+            # Elegir un punto aleatorio dentro de la zona destino
+            target_x = zx + random.uniform(0.2, 0.8) * zw
+            target_y = zy + random.uniform(0.2, 0.8) * zh
 
-        # Vector de dirección
-        dx = tx - bx
-        dy = ty - by
-        dist = max((dx**2 + dy**2) ** 0.5, 1)
-        dir_x, dir_y = dx / dist, dy / dist
+        # --- Calcular dirección del golpe ---
+        dx = target_x - self.x
+        dy = target_y - self.y
+        dz = 0 - self.z  # hacia el suelo
 
-        # Velocidad y altura
-        speed = random.uniform(7, 9)
-        self.vx = dir_x * speed
-        self.vy = dir_y * speed
-        self.vz = random.uniform(7, 9)
+        dist = math.sqrt(dx**2 + dy**2)
+        if dist == 0:
+            dist = 1e-5
 
-        print(f"📍 Objetivo {side}-{target_zone or 'center'} → ({tx:.1f}, {ty:.1f})")
-        print(f"📐 Dirección: vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
+        # --- Ajustar fuerza y velocidad del golpe ---
+        speed = random.uniform(8, 11)
+        self.vx = (dx / dist) * speed
+        self.vy = (dy / dist) * speed
+        self.vz = random.uniform(7, 10)
+
+        print(f"🎾 Golpe de {'P2' if is_player2 else 'P1'} hacia '{zone}' → ({target_x:.1f}, {target_y:.1f}) con vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
