@@ -563,6 +563,7 @@ class Game:
 
         if self._debug_bounds:
             self.field.draw_debug_bounds(self.PANTALLA)
+            self.field.net.draw_debug(self.PANTALLA)
 
         for b in self.balls:
             b.draw(self.PANTALLA)
@@ -577,6 +578,42 @@ class Game:
         if self.score:
             self.score.draw_hud(self.PANTALLA, self.font_hud)
 
+        #if self._debug_bounds:
+            # Dibuja la red lógica
+            #net = self.field.net
+            #if hasattr(net, "rect"):
+                #pygame.draw.rect(self.PANTALLA, (0, 200, 255), net.rect, width=2)
+            #if hasattr(net, "collision_rect"):
+                #pygame.draw.rect(self.PANTALLA, (255, 0, 255), net.collision_rect, width=2)
+
+            # Dibuja pelota (posición real y proyectada)
+            #for b in self.balls:
+            #    pygame.draw.circle(self.PANTALLA, (0, 255, 0),
+            #                    (int(b.screen_x), int(b.screen_y)), 6, width=1)
+            #    pygame.draw.circle(self.PANTALLA, (255, 255, 0),
+            #                    (int(b.x), int(b.y)), 4, width=1)
+
+    def _render_victoria(self):
+        # Fondo tenue del ingame + cartel
+        self._render_ingame()
+        overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        overlay.fill((10, 40, 10, 180))
+        self.PANTALLA.blit(overlay, (0, 0))
+        t1 = self.font_title.render("¡VICTORIA!", True, BLANCO)
+        t2 = self.font_small.render("Enter: Reintentar   |   Esc: Volver al menú", True, BLANCO)
+        self.PANTALLA.blit(t1, t1.get_rect(center=(ANCHO // 2, ALTO // 2 - 20)))
+        self.PANTALLA.blit(t2, t2.get_rect(center=(ANCHO // 2, ALTO // 2 + 40)))
+
+    def _render_gameover(self):
+        self._render_ingame()
+        overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        overlay.fill((40, 10, 10, 180))
+        self.PANTALLA.blit(overlay, (0, 0))
+        t1 = self.font_title.render("GAME OVER", True, BLANCO)
+        t2 = self.font_small.render("Enter: Reintentar   |   Esc: Volver al menú", True, BLANCO)
+        self.PANTALLA.blit(t1, t1.get_rect(center=(ANCHO // 2, ALTO // 2 - 20)))
+        self.PANTALLA.blit(t2, t2.get_rect(center=(ANCHO // 2, ALTO // 2 + 40)))
+
     # ---------------------------
     # Rally / PUNTUACIÓN
     # ---------------------------
@@ -587,6 +624,7 @@ class Game:
         self.balls.add(ball)
         self._ball_main = ball
         ball.start_rally()
+        ball.launch_toward_random_zone()
         self.last_hitter = None
 
         if self.ai_p2 is not None:

@@ -64,6 +64,10 @@ class Player(GameObject):
         self._last_ix = 0.0
         self._last_iy = 0.0
 
+        self.swing_active = False
+        self.swing_timer = 0
+        self.swing_duration = 600  # milisegundos de ventana para golpear
+
         # Golpe actual (se setea en mover() leyendo teclas)
         self._shot_mode = "flat"   # "flat" | "topspin" | "slice"
 
@@ -109,7 +113,7 @@ class Player(GameObject):
         self._last_swing = -10**9
         self._hit_flash_active = False
         self._hit_flash_start = 0
-        self._hit_flash_duration = 100  # ms
+        self._hit_flash_duration = 600  # ms
 
         self._project_to_screen()
 
@@ -234,7 +238,32 @@ class Player(GameObject):
                 self.anim_timer = 0 
                 self.frame_index = 0 
                 self.current_animation = "idle-P2" if self.is_player2 else "idle" 
+            # --- Dirección de golpe según input ---
+            if self.racket_active:
+                if not self.is_player2:  # Jugador 1
+                    if teclas[pygame.K_LEFT]:
+                        self.shot_dir = "left"
+                    elif teclas[pygame.K_RIGHT]:
+                        self.shot_dir = "right"
+                    else:
+                        self.shot_dir = "center"
+                else:  # Jugador 2 (usa A/D)
+                    if teclas[pygame.K_a]:
+                        self.shot_dir = "left"
+                    elif teclas[pygame.K_d]:
+                        self.shot_dir = "right"
+                    else:
+                        self.shot_dir = "center"
+            else:
+                self.shot_dir = None
             return
+
+        if self.swing_active:
+            if pygame.time.get_ticks() - self.swing_timer > self.swing_duration:
+                self.swing_active = False
+                self.racket_active = False
+                print("⏱️ Fin de ventana de golpe.")
+
 
         if self.is_player2:
             k_left, k_right, k_up, k_down, k_swing = pygame.K_a, pygame.K_d, pygame.K_w, pygame.K_s, pygame.K_f
@@ -334,6 +363,11 @@ class Player(GameObject):
         if press_swing: 
             self.estado = "golpeando" 
             self.racket_active = True 
+
+            self.swing_active = True
+            self.swing_timer = pygame.time.get_ticks()
+            self.racket_active = True
+            print("🏸 Swing iniciado!")
             
             self.anim_timer = 0 
             if self.is_player2: 
@@ -397,69 +431,50 @@ class Player(GameObject):
     # ---------------------------
     # Colisiones con pelota
     # ---------------------------
-    def check_ball_collision(self, ball):
-        if not ball or not hasattr(ball, "rect"):
+    def check_ball_collision(self, ball, tolerance=25):
+        """Chequea si la pelota colisiona con la raqueta activa (USANDO COORDENADAS DE PANTALLA)."""
+        if not self.racket_active:
             return False
 
-        # --- 1) Colisión física de la raqueta ---
-        if self.racket_active and ball.rect.colliderect(self.racket_rect):
+        # Asegurarnos que ball.rect y las propiedades screen_x/screen_y estén actualizadas
+        # (Ball.update() debería actualizar rect.center usando screen_x/screen_y)
+        try:
+            bx = int(getattr(ball, "screen_x"))
+            by = int(getattr(ball, "screen_y"))
+        except Exception:
+            # fallback si no existen las propiedades
+            bx = int(ball.rect.centerx)
+            by = int(ball.rect.centery)
 
-            # Evita superposición directa
-            if ball.rect.centerx < self.racket_rect.centerx:
-                ball.rect.right = self.racket_rect.left - 1
-            else:
-                ball.rect.left = self.racket_rect.right + 1
+        r = getattr(ball, "radio", 10)
+        ball_2d_rect = pygame.Rect(bx - r, by - r, r*2, r*2)
 
-            # --- 2) Cálculo de fuerza y dirección base ---
-            # h_ratio mide cuán centrado golpeó la pelota (-1 = borde izq, +1 = borde der)
-            h_span = max(1, self.racket_rect.width // 2)
-            h_ratio = _clamp((ball.rect.centerx - self.racket_rect.centerx) / h_span, -1.0, 1.0)
+        # Debug: ver posiciones en pantalla
+        if getattr(self, "_debug_collision", False):
+            print(f"📍 [ISO] Player rect: {self.racket_rect} | Ball screen: ({bx},{by})")
 
-            # Última dirección de movimiento del jugador
-            push_x = self._last_ix * 2.0   # movimiento lateral previo
-            push_y = self._last_iy * 1.2   # movimiento vertical previo
+        # Solo durante la ventana de swing
+        if self.swing_active:
+            if ball_2d_rect.colliderect(self.racket_rect):
+                print("🔥 Colisión detectada entre raqueta y pelota!")
+                if(self.is_player2):
+                    zone = self.direccion2 or random.choice(["left", "center", "right"])
+                else:
+                    zone = self.direccion1 or random.choice(["left", "center", "right"])
 
-            # Variación aleatoria leve (para evitar golpes idénticos)
-            spin_rand = random.uniform(-0.25, 0.25)
+                # Pasamos la posición del jugador en MUNDO (world_x/world_y) para calcular la dirección del tiro
+                ball.hit_by_player((self.world_x, self.world_y), zone)
+                print(f"💥 Golpe hacia zona: {zone}")
+                self.swing_active = False
+                self.racket_active = False
+                return True
 
-            # --- 3) Límites de velocidad ---
-            max_spd = getattr(ball, "_max_speed", 9.0)
-            min_spd = getattr(ball, "_min_speed", 2.0)
-
-            # Magnitud base del golpe
-            vy_base = 7.0 + abs(push_y) * 1.2 #Modificar el primer número para variar la velocidad de la pelota
-            speed = max(min_spd + 1.0, vy_base)
-
-            # --- 4) Dirección isométrica ---
-            # Golpe principal hacia el noreste (x+, y-)
-            angle = 45
-            dir_x = math.cos(math.radians(angle))
-            dir_y = -math.sin(math.radians(angle))
-
-            # Solo invertir la orientación si es player2
-            if getattr(self, "is_player2", False):
-                dir_x *= -1
-                dir_y *= -1
-
-            # Aplicar desplazamiento lateral y variación aleatoria
-            spin_rand = random.uniform(-0.8, 0.8)
-            vx_new = (dir_x * speed) + (h_ratio * 2.0) + spin_rand
-            vy_new = (dir_y * speed) - (h_ratio * 1.0)
-
-            ball.vx = _clamp(vx_new, -max_spd, max_spd)
-            ball.vy = _clamp(vy_new, -max_spd, max_spd)
-
-            # --- 5) Altura y efecto de spin ---
-            ball.vel_altura = 5.5  # impulso hacia arriba al golpear
-            #ball.altura = max(ball.altura, 8.0)
-
-            if self._shot_mode == "topspin":
-                ball.spin = SPIN_TOPSPIN
-            elif self._shot_mode == "slice":
-                ball.spin = SPIN_SLICE
-            else:
-                ball.spin = SPIN_FLAT
-
-            return True
-
+        # debug de distancia (útil si querés ajustar tolerancia)
+        # calcular distancia en pantalla entre centros:
+        dx = (self.racket_rect.centerx - bx)
+        dy = (self.racket_rect.centery - by)
+        dist = (dx*dx + dy*dy) ** 0.5
+        # ajustá tolerancia si querés
+        # print(f"💨 Sin colisión con pelota. Distancia pantalla={dist:.1f}, tolerancia=25")
         return False
+
