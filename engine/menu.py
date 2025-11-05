@@ -12,21 +12,21 @@ except Exception:
 
 class MenuScreen:
     """
-    Menú principal con selección de modo 1P/2P (opcional).
+    Menú principal con selección de modo 1P/2P.
     Integra audio UI si se provee un AudioManager (play_sound).
 
     Uso típico desde Game:
-      self.menu = MenuScreen(self.PANTALLA, self.audio)
+      self.menu = MenuScreen(self.PANTALLA, self.audio, current_mode=self.modo)
       self.menu.open()
       # en loop:
       action = self.menu.handle_event(evento)
-      if action: self._on_menu_action(action)
+      if action: self._on_menu_action(action)  # Game decide persistencia y modo
       self.menu.update(dt)
       self.menu.render()
 
     Donde _on_menu_action puede hacer:
       if action[0] == "start":
-          self.modo = action[1]["mode"]  # "1P" o "2P"
+          self._set_mode(action[1]["mode"])   # "1P" o "2P" (Game persiste y aplica)
           self.estado_juego = "jugando"
           self._set_music_state("ingame")
           self._start_new_rally()
@@ -36,10 +36,13 @@ class MenuScreen:
           pygame.event.post(pygame.event.Event(pygame.QUIT))
     """
 
-    def __init__(self, screen: pygame.Surface, audio=None,
+    def __init__(self,
+                 screen: pygame.Surface,
+                 audio=None,
                  font_title: Optional[pygame.font.Font] = None,
                  font_item: Optional[pygame.font.Font] = None,
-                 font_small: Optional[pygame.font.Font] = None):
+                 font_small: Optional[pygame.font.Font] = None,
+                 current_mode: str = "1P"):
         self.screen = screen
         self.audio = audio
 
@@ -50,10 +53,10 @@ class MenuScreen:
 
         # Ítems del menú (texto, acción, payload opcional)
         self.items: List[Tuple[str, str, Dict[str, Any]]] = [
-            ("1 Jugador",  "start",   {"mode": "1P"}),
-            ("2 Jugadores","start",   {"mode": "2P"}),
-            ("Opciones",   "options", {}),
-            ("Salir",      "quit",    {}),
+            ("1 Jugador",   "start",   {"mode": "1P"}),
+            ("2 Jugadores", "start",   {"mode": "2P"}),
+            ("Opciones",    "options", {}),
+            ("Salir",       "quit",    {}),
         ]
         self.index = 0
         self._opened = False
@@ -61,11 +64,23 @@ class MenuScreen:
         # Efecto visual simple
         self._sel_tick = 0.0
 
+        # Modo actual (lo refleja en el footer)
+        self.current_mode = (current_mode or "1P").upper()
+        if self.current_mode not in ("1P", "2P"):
+            self.current_mode = "1P"
+
         # Tips / ayuda en pantalla
-        self.footer_lines = [
+        self.footer_lines: List[str] = [
             "↑/↓ para moverte · Enter para seleccionar · Esc para salir",
             "Atajo rápido: 1 → 1 Jugador | 2 → 2 Jugadores",
         ]
+
+    # -------- API para sincronizar desde Game --------
+    def set_current_mode(self, mode: str):
+        """Permite que Game actualice el modo mostrado en el menú."""
+        m = (mode or "").upper()
+        if m in ("1P", "2P"):
+            self.current_mode = m
 
     # --------------- Ciclo de vida ---------------
     def open(self):
@@ -91,7 +106,7 @@ class MenuScreen:
             elif event.key == pygame.K_ESCAPE:
                 self._play("ui_back")
                 return ("quit", {})
-            # Atajos
+            # Atajos de modo
             elif event.key == pygame.K_1:
                 return self._select_direct("1P")
             elif event.key == pygame.K_2:
@@ -155,6 +170,12 @@ class MenuScreen:
 
         # Footer / ayuda
         fy = base_y + gap * len(self.items) + 36
+        # Línea dinámica: muestra el modo actual
+        current_line = f"Modo actual: {self.current_mode}"
+        s0 = self.font_small.render(current_line, True, BLANCO)
+        self.screen.blit(s0, s0.get_rect(center=(cx, fy)))
+        fy += 26
+
         for line in self.footer_lines:
             s = self.font_small.render(line, True, BLANCO)
             self.screen.blit(s, s.get_rect(center=(cx, fy)))
@@ -177,7 +198,7 @@ def run_standalone():
     pygame.init()
     screen = pygame.display.set_mode((ANCHO, ALTO))
     clock = pygame.time.Clock()
-    menu = MenuScreen(screen, audio=None)
+    menu = MenuScreen(screen, audio=None, current_mode="1P")
     menu.open()
 
     running = True
@@ -190,6 +211,9 @@ def run_standalone():
                 action = menu.handle_event(e)
                 if action:
                     print("[Menu action]", action)
+                    if action[0] == "start" and "mode" in action[1]:
+                        # reflejar en UI el modo elegido (en tu Game real, hacés _set_mode)
+                        menu.set_current_mode(action[1]["mode"])
                     if action[0] == "quit":
                         running = False
 
