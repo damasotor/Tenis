@@ -79,7 +79,7 @@ class Game:
         # --- Pelotas ---
         self.balls = pygame.sprite.Group()
         self._ball_main = None  # referencia a la pelota "principal"
-
+        self.current_server = "P1"
         # IA / control según modo
         self.ai_p2 = None
         self._apply_mode()
@@ -452,7 +452,7 @@ class Game:
         if item == "Comenzar":
             self._set_music_state("ingame")
             self.estado_juego = 'jugando'
-            self._start_new_rally()
+            self._start_new_rally(self.current_server)
         elif item == "Opciones":
             self._enter_options()
         elif item == "Salir":
@@ -628,10 +628,20 @@ class Game:
         self.PANTALLA.blit(t1, t1.get_rect(center=(ANCHO // 2, ALTO // 2 - 20)))
         self.PANTALLA.blit(t2, t2.get_rect(center=(ANCHO // 2, ALTO // 2 + 40)))
 
+    def set_starting_player(self, player: str):
+        """Permite elegir el jugador que saca ('P1' o 'P2')."""
+        p = (player or "").upper()
+        if p in ("P1", "P2"):
+            self.current_server = p
+        else:
+            # Fallback por si la entrada es inválida
+            print(f"[ERROR] Jugador inicial inválido: {player}. Usando '{self.current_server}'.")
+
     # ---------------------------
-    # Rally / PUNTUACIÓN
+    # Rally / PUNTUACIÓN donde empieza la pelota
     # ---------------------------
-    def _start_new_rally(self):
+    def _start_new_rally(self, player: str):
+    
         """Crea una pelota al centro y dispara el saque."""
         cx, cy = 150, 350
         self.balls.empty()

@@ -70,7 +70,10 @@ class Ball(pygame.sprite.Sprite):
         self.image = pygame.Surface((self.radio * 2, self.radio * 2), pygame.SRCALPHA)
         pygame.draw.circle(self.image, (255, 255, 255), (self.radio, self.radio), self.radio)
         self.rect = self.image.get_rect()
-        self.rect.center = (self.screen_x, self.screen_y)
+        self.rect.center = (self.screen_x, self.screen_y)   
+        # 💡 CAMBIOS NUEVOS: Cooldown para evitar rebotes múltiples
+        self._net_cd_ms = 100        # 100 milisegundos de espera
+        self._last_net_hit = -10**9  # Inicializa el último golpe en un tiempo muy pasado
 
         
         """
@@ -383,13 +386,35 @@ class Ball(pygame.sprite.Sprite):
         #if hasattr(field.net, "ball_hits_net"):
         #    if field.net.ball_hits_net((self.world_x, self.world_y, self.z), self.radius):
         if hasattr(self.game, "field"):
+            # 💡 CORRECCIÓN: Definir 'net' aquí, asegurando la indentación correcta.
+            net = self.game.field.net
+            # 1. 💡 Lógica de Cooldown: Si ya chocó recientemente, salir.
+            now = pygame.time.get_ticks()
+            if now < self._last_net_hit + self._net_cd_ms:
+                return
+
             if self.game.field.net.ball_hits_net((self.x, self.y, self.z), self.radio):
-                # Rebote más realista
-                self.vz = abs(self.vz) * 0.5  # rebote hacia arriba
-                self.vx *= 0.8
-                self.vy *= 0.8
-                self.z += 2  # ligera corrección visual
-                print("🔴 Rebote en la red")
+                # 2. Activar cooldown: Registrar el golpe.
+                self._last_net_hit = now
+
+                # Detención total en el plano horizontal (x, y)
+                self.vx = 0.0 # Detiene el movimiento lateral (eje X)
+                self.vy = 0.0 # Detiene el movimiento de profundidad (eje Y)
+                self.vz *= 0.2
+                net_y_pos = net.y # 105.0, la Y central de la red.
+                CLEARANCE = 5.0 # Aumento del margen de seguridad (ej: 3 unidades)
+                net_y_pos = 105.0
+                
+                # 3. 🔑 CORRECCIÓN CRÍTICA: Reajuste Geométrico (¡No usar self.vy!)
+                if self.y > net_y_pos:
+                    # Pelota en el lado Y positivo (Jugador 1), empujar hacia afuera.
+                    self.y = net_y_pos - (self.radio + CLEARANCE) 
+                else: 
+                    # Pelota en el lado Y negativo (Jugador 2), empujar hacia afuera.
+                    self.y = net_y_pos + self.radio + CLEARANCE
+                    
+                print(f"🔴 Rebote en la red. Posición final (x,y,z): ({self.x:.2f}, {self.y:.2f}, {self.z:.2f})")
+
 
 
     def hit_by_player(self, player_pos: Tuple[float, float], target_zone: Optional[str] = None):
