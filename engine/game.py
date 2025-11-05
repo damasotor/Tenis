@@ -42,7 +42,7 @@ class Game:
 
         # Mundo
         self.field = Field(6, 10)
-        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False)# >x = Más a la derecha, >y = Más atrás
+        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False)  # >x = Derecha, >y = Atrás
         self.jugador2 = Player(385, ALTO / 2 - 450, field=self.field, jugador2=True)
 
         # Reloj
@@ -108,6 +108,7 @@ class Game:
         self._opts_groups = ["music",  "sfx", "ui"]
         self._opts_index  = 0
         self._opts_values = [
+            self.modo,
             self.audio.group_vol["music"],
             self.audio.group_vol["sfx"],
             self.audio.group_vol["ui"],
@@ -119,6 +120,51 @@ class Game:
         # --- Cuenta regresiva de reinicio (punto 4) ---
         self._restart_cd = RestartCountdown(self._reiniciar_partida) if RestartCountdown else None
         self._restart_block_input = False  # si True, no procesamos entradas de juego durante el 3-2-1
+
+    # ---------------------------
+    # Config de juego (modo 1P/2P)
+    # ---------------------------
+    def _load_game_config(self):
+        try:
+            if os.path.exists(self.game_config_path):
+                with open(self.game_config_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                m = str(cfg.get("modo", "1P")).upper()
+                if m in ("1P", "2P"):
+                    self.modo = m
+        except Exception as e:
+            print(f"[GameCfg] No se pudo leer game_config.json: {e}")
+
+    def _save_game_config(self):
+        try:
+            os.makedirs(os.path.dirname(self.game_config_path), exist_ok=True)
+            with open(self.game_config_path, "w", encoding="utf-8") as f:
+                json.dump({"modo": self.modo}, f, indent=2)
+        except Exception as e:
+            print(f"[GameCfg] No se pudo guardar game_config.json: {e}")
+
+    def _apply_mode(self):
+        """Aplica el modo actual (1P → IA en P2; 2P → ambos humanos)."""
+        if self.modo == "1P" and SimpleTennisAI is not None:
+            self.jugador2.is_human = False
+            self.jugador2.home_x = getattr(self.jugador2, "world_x", getattr(self.jugador2, "x", 0))
+            self.jugador2.home_y = getattr(self.jugador2, "world_y", getattr(self.jugador2, "y", 0))
+            self.ai_p2 = SimpleTennisAI(self.jugador2, self._ball_main, side="top")  # type: ignore
+        else:
+            self.jugador2.is_human = True
+            self.ai_p2 = None
+
+    def _set_mode(self, new_mode: str):
+        new_mode = (new_mode or "").upper()
+        if new_mode not in ("1P", "2P"):
+            return
+        if new_mode == self.modo:
+            return
+        self.modo = new_mode
+        self._apply_mode()
+        self._save_game_config()
+        if hasattr(self, "audio"):
+            self.audio.play_sound("ui_select")
 
     # ---------------------------
     # Carga de sonidos
@@ -282,7 +328,12 @@ class Game:
 
                     # ---- ESTADOS ----
                     if self.estado_juego == 'menu':
-                        if evento.key in (pygame.K_UP, pygame.K_w):
+                        # Atajos de modo en MENÚ: 1 → 1P, 2 → 2P
+                        if evento.key == pygame.K_1:
+                            self._set_mode("1P")
+                        elif evento.key == pygame.K_2:
+                            self._set_mode("2P")
+                        elif evento.key in (pygame.K_UP, pygame.K_w):
                             self.menu_index = (self.menu_index - 1) % len(self.menu_items)
                             self.audio.play_sound("ui_move")
                         elif evento.key in (pygame.K_DOWN, pygame.K_s):
@@ -472,7 +523,7 @@ class Game:
         self.PANTALLA.blit(surf, surf.get_rect(center=(ANCHO // 2, ALTO // 2)))
 
     # ---------------------------
-    # Opciones de Audio
+    # Opciones (ahora incluye Modo)
     # ---------------------------
     def _enter_options(self):
         if "ui_whoosh" in self.audio.sounds:
@@ -480,9 +531,10 @@ class Game:
         self.audio.play_sound("ui_select")
         self.estado_juego = 'opciones'
         self._opts_values = [
-            self.audio.group_vol["music"],
-            self.audio.group_vol["sfx"],
-            self.audio.group_vol["ui"],
+            self.modo,                              # índice 0: "1P"/"2P"
+            self.audio.group_vol["music"],          # 1
+            self.audio.group_vol["sfx"],            # 2
+            self.audio.group_vol["ui"],             # 3
         ]
         self._opts_index = 0
 
@@ -495,9 +547,13 @@ class Game:
             return True
 
         if key in (pygame.K_RETURN, pygame.K_SPACE):
+            # Aplicar volúmenes
             for i, g in enumerate(self._opts_groups):
-                self.audio.set_group_volume(g, self._opts_values[i])
+                if g:  # sólo grupos de audio (índice 0 es None)
+                    self.audio.set_group_volume(g, self._opts_values[i])
             self._save_audio_config()
+            # Guardar modo
+            self._save_game_config()
             self.audio.play_sound("ui_select")
             if "ui_whoosh" in self.audio.sounds:
                 self.audio.play_sound("ui_whoosh")
@@ -514,26 +570,37 @@ class Game:
             return True
 
         idx = self._opts_index
-        if key in (pygame.K_LEFT, pygame.K_a):
-            self._opts_values[idx] = max(0.0, round(self._opts_values[idx] - 0.05, 2))
-            self.audio.set_group_volume(self._opts_groups[idx], self._opts_values[idx])
-            return True
-        if key in (pygame.K_RIGHT, pygame.K_d):
-            self._opts_values[idx] = min(1.0, round(self._opts_values[idx] + 0.05, 2))
-            self.audio.set_group_volume(self._opts_groups[idx], self._opts_values[idx])
-            return True
+        if idx == 0:
+            # Toggle de "Modo de juego"
+            if key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
+                self._set_mode("2P" if self.modo == "1P" else "1P")
+                self._opts_values[0] = self.modo
+                return True
+        else:
+            # Sliders de audio
+            if key in (pygame.K_LEFT, pygame.K_a):
+                self._opts_values[idx] = max(0.0, round(self._opts_values[idx] - 0.05, 2))
+                self.audio.set_group_volume(self._opts_groups[idx], self._opts_values[idx])
+                return True
+            if key in (pygame.K_RIGHT, pygame.K_d):
+                self._opts_values[idx] = min(1.0, round(self._opts_values[idx] + 0.05, 2))
+                self.audio.set_group_volume(self._opts_groups[idx], self._opts_values[idx])
+                return True
 
         return False
 
     def _draw_options(self):
-        title = self.font_title.render("Opciones de Audio", True, BLANCO)
+        title = self.font_title.render("Opciones", True, BLANCO)
         self.PANTALLA.blit(title, title.get_rect(center=(ANCHO // 2, 120)))
         y0 = 220
         for i, name in enumerate(self._opts_names):
             sel = (i == self._opts_index)
             label = f"> {name} <" if sel else f"  {name}  "
-            val = int(self._opts_values[i] * 100)
-            line = f"{label} : {val}%"
+            if i == 0:
+                line = f"{label} : {self.modo}  (←/→)"
+            else:
+                val = int(self._opts_values[i] * 100)
+                line = f"{label} : {val}%"
             surf = self.font_item.render(line, True, BLANCO)
             self.PANTALLA.blit(surf, surf.get_rect(center=(ANCHO // 2, y0 + i * 60)))
         hint = "←/→ ajustar, ↑/↓ mover, Enter guardar, Esc cancelar"
@@ -581,21 +648,6 @@ class Game:
 
         if self.score:
             self.score.draw_hud(self.PANTALLA, self.font_hud)
-
-        #if self._debug_bounds:
-            # Dibuja la red lógica
-            #net = self.field.net
-            #if hasattr(net, "rect"):
-                #pygame.draw.rect(self.PANTALLA, (0, 200, 255), net.rect, width=2)
-            #if hasattr(net, "collision_rect"):
-                #pygame.draw.rect(self.PANTALLA, (255, 0, 255), net.collision_rect, width=2)
-
-            # Dibuja pelota (posición real y proyectada)
-            #for b in self.balls:
-            #    pygame.draw.circle(self.PANTALLA, (0, 255, 0),
-            #                    (int(b.screen_x), int(b.screen_y)), 6, width=1)
-            #    pygame.draw.circle(self.PANTALLA, (255, 255, 0),
-            #                    (int(b.x), int(b.y)), 4, width=1)
 
     def _render_victoria(self):
         # Fondo tenue del ingame + cartel
