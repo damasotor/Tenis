@@ -387,7 +387,11 @@ class Game:
                         # asegurar referencia a la pelota por si cambió en el rally
                         if getattr(self.ai_p2, "ball", None) is not self._ball_main:
                             self.ai_p2.ball = self._ball_main  # type: ignore
-                        self.ai_p2.update()
+                        # obtener las teclas simuladas desde la IA
+                        simulated_keys = self.ai_p2.get_simulated_keys()
+
+                        # mover jugador 2 usando las teclas simuladas
+                        self.jugador2.mover(simulated_keys)
                     else:
                         self.jugador2.mover(teclas)
 
