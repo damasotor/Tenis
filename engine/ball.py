@@ -82,7 +82,10 @@ class Ball(pygame.sprite.Sprite):
         self._last_net_hit = -10**9  # Inicializa el último golpe en un tiempo muy pasado
         pygame.draw.circle(self.image, (255, 255, 255), (self.radio, self.radio), self.radio)
         self.rect = self.image.get_rect()
-        self.rect.center = (self.screen_x, self.screen_y)
+        self.rect.center = (self.screen_x, self.screen_y)   
+        # 💡 CAMBIOS NUEVOS: Cooldown para evitar rebotes múltiples
+        self._net_cd_ms = 100        # 100 milisegundos de espera
+        self._last_net_hit = -10**9  # Inicializa el último golpe en un tiempo muy pasado
 
   
 
@@ -369,16 +372,14 @@ class Ball(pygame.sprite.Sprite):
         #if hasattr(field.net, "si colisiona con la red"):
         #    if field.net.ball_hits_net((self.world_x, self.world_y, self.z), self.radius):
         if hasattr(self.game, "field"):
-        # 💡 CORRECCIÓN: Definir 'net' aquí, asegurando la indentación correcta.
+            # 💡 CORRECCIÓN: Definir 'net' aquí, asegurando la indentación correcta.
             net = self.game.field.net
             # 1. 💡 Lógica de Cooldown: Si ya chocó recientemente, salir.
             now = pygame.time.get_ticks()
             if now < self._last_net_hit + self._net_cd_ms:
                 return
 
-            
-            if net.ball_hits_net((self.x, self.y, self.z), self.radio):
-
+            if self.game.field.net.ball_hits_net((self.x, self.y, self.z), self.radio):
                 # 2. Activar cooldown: Registrar el golpe.
                 self._last_net_hit = now
 
