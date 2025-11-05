@@ -9,6 +9,13 @@ import pygame
 
 from engine.utils.screen import ALTO, ANCHO, screen_to_world
 
+# Helpers de colisión geométrica
+try:
+    from engine.physics.collision import circle_rect_collision, circle_rect_mtv
+except Exception:
+    circle_rect_collision = None
+    circle_rect_mtv = None
+
 TrailPoint = Tuple[int, int]
 FrameRect = Tuple[int, int, int, int]
 
@@ -51,6 +58,8 @@ class Ball(pygame.sprite.Sprite):
     - Sprite opcional; fallback a círculo
     - Trail, sombra, squash/stretch
     - Spin con efecto en trayectoria (grav extra/menos y deriva)
+    - Colisión de red realista: cinta (pasa con roce) vs cuerpo (rebota)
+    - Pique IN/OUT: decide según rect del court con margen tolerante
     """
     def __init__(self, x: int, y: int, game, vx: float, vy: float):
         super().__init__()
@@ -68,68 +77,14 @@ class Ball(pygame.sprite.Sprite):
         # Radio visual
         self.radio = 10
         self.image = pygame.Surface((self.radio * 2, self.radio * 2), pygame.SRCALPHA)
+        # 💡 CAMBIOS NUEVOS: Cooldown para evitar rebotes múltiples
+        self._net_cd_ms = 100        # 100 milisegundos de espera
+        self._last_net_hit = -10**9  # Inicializa el último golpe en un tiempo muy pasado
         pygame.draw.circle(self.image, (255, 255, 255), (self.radio, self.radio), self.radio)
         self.rect = self.image.get_rect()
         self.rect.center = (self.screen_x, self.screen_y)
 
-        
-        """
-        # ----------------- Física -----------------
-        # Posición y velocidad en espacio 3D
-        self.x = float(x)
-        self.y = float(y)
-        self.z = 0.0  # altura actual sobre el suelo
-        #self.vx = 4.0
-        #self.vy = 2.5  # movimiento hacia adelante en la cancha
-        #self.vz = -6.0 # impulso inicial hacia arriba
-        self.vx = vx
-        self.vy = vy
-        self._min_speed = 2.0
-        self._max_speed = 9.0
-
-        # Spin (valor escalar; + topspin, - slice). Decae cada frame.
-        self.spin = 0.0
-
-        # Cooldown para red
-        self._net_cd_ms = 90
-        self._last_net_hit = -10**9
-
-        # ----------------- Visual -----------------
-        self._use_sprite = False
-        self._sprite_sheet: Optional[pygame.Surface] = None
-        self._animations = collections.defaultdict(list)  # type: ignore
-        self._current_anim = "spin"
-        self._frame_index = 0
-        self._animator: Optional["Animator"] = Animator(default_fps=14) if Animator else None
-
-        # Sombra
-        self._shadow_enabled = True
-        self._shadow_alpha = 70
-
-        # Trail
-        self._trail_enabled = True
-        self._trail_len = 10
-        self._trail: collections.deque[TrailPoint] = collections.deque(maxlen=self._trail_len)
-
-        # Squash/Stretch
-        self._squash_timer = 0
-        self._squash_duration = 90
-        self._squash_amount = 0.20
-
-        # Imagen / rect
-        self._load_sprite_or_fallback()
-        self.rect.center = (x, y)
-
-        # Gravedad y rebote
-        self.gravity = 0.35     # fuerza de gravedad
-        self.bounce_factor = 0.65  # energía retenida al rebotar
-        self.ground_y = game.PANTALLA.get_height() * 0.78  # altura del suelo
-        
-        # Altura vertical (distancia sobre el suelo)
-        self.altura = 20.0
-        self.vz = -20.0  # velocidad vertical (eje Z)
-        self.MAX_ALTURA = 80.0
-        """
+  
 
         # ----------------- Propiedades útiles -----------------
     #@property
@@ -157,7 +112,6 @@ class Ball(pygame.sprite.Sprite):
         iso_x, iso_y = world_to_iso(self.x, self.y, self.z)
         # bajamos un poco para centrar cancha visualmente
         return iso_y + ALTO // 3
-
 
     # ----------------- Carga sprite opcional -----------------
     def _load_sprite_or_fallback(self):
@@ -220,6 +174,18 @@ class Ball(pygame.sprite.Sprite):
     def apply_shot_spin(self, spin_value: float):
         """Se llama desde Player al impactar: setea spin inicial del tiro."""
         self.spin = float(spin_value)
+
+    # ----------------- Helpers de estado -----------------
+    def _sync_ground_y(self):
+        """Sincroniza ground_y con el rect real del court (bottom - margen)."""
+        try:
+            screen = self.game.PANTALLA
+            field = self.game.field
+            court_rect = field.get_court_rect(screen)
+            self.ground_y = court_rect.bottom - self._ground_margin
+        except Exception:
+            # Fallback si algo falla
+            self.ground_y = int(self.game.PANTALLA.get_height() * 0.78)
 
     # ----------------- Helpers audio -----------------
     def _calc_pan(self) -> float:
@@ -302,15 +268,36 @@ class Ball(pygame.sprite.Sprite):
         self._trigger_squash()
 
     def on_body_hit(self):
-        # Choque con cuerpo es “error” del jugador impactado; Game se encarga del punto
+        """
+        Choque con el cuerpo de un jugador.
+        Regla: cuenta como error del último que golpeó la pelota → punto para el rival.
+        También reproducimos un rebote amortiguado (feedback visual/sonoro) y jingle de punto.
+        """
+        # Feedback inmediato
         if hasattr(self.game, "audio"):
             self.game.audio.play_sound_panned("bounce_court", self._calc_pan())
+
         DEAD_BOUNCE_FACTOR = 0.25
         self.vx *= -DEAD_BOUNCE_FACTOR
         self.vy *= -DEAD_BOUNCE_FACTOR
-        # Jingle/UI del punto (la asignación la hará Game via Player)
-        self.on_point_scored()
         self._trigger_squash()
+
+        # Jingle/UI del punto (igual que en OUT)
+        self.on_point_scored()
+
+        # Adjudicar punto según el último que golpeó
+        try:
+            last = getattr(self.game, "last_hitter", None)
+            if last == "P1":
+                self.game.point_for("P2")
+            elif last == "P2":
+                self.game.point_for("P1")
+            else:
+                # Si no sabemos quién pegó último, por defecto punto para P2
+                self.game.point_for("P2")
+        except Exception as _e:
+            # print(f"[Ball] on_body_hit sin score manager: {_e}")
+            pass
 
     def on_out(self):
         # SFX
@@ -326,7 +313,6 @@ class Ball(pygame.sprite.Sprite):
             elif last == "P2":
                 self.game.point_for("P1")
             else:
-                # Si no sabemos, darle el punto a P2 por defecto para no bloquear el flujo
                 self.game.point_for("P2")
 
     def on_point_scored(self):
@@ -380,52 +366,67 @@ class Ball(pygame.sprite.Sprite):
         # Debug opcional
         #print(f"x={self.x:.2f}, y={self.y:.2f}, z={self.z:.2f}, vz={self.vz:.2f}")
 
-        #if hasattr(field.net, "ball_hits_net"):
+        #if hasattr(field.net, "si colisiona con la red"):
         #    if field.net.ball_hits_net((self.world_x, self.world_y, self.z), self.radius):
         if hasattr(self.game, "field"):
-            if self.game.field.net.ball_hits_net((self.x, self.y, self.z), self.radio):
-                # Rebote más realista
-                self.vz = abs(self.vz) * 0.5  # rebote hacia arriba
-                self.vx *= 0.8
-                self.vy *= 0.8
-                self.z += 2  # ligera corrección visual
-                print("🔴 Rebote en la red")
+        # 💡 CORRECCIÓN: Definir 'net' aquí, asegurando la indentación correcta.
+            net = self.game.field.net
+            # 1. 💡 Lógica de Cooldown: Si ya chocó recientemente, salir.
+            now = pygame.time.get_ticks()
+            if now < self._last_net_hit + self._net_cd_ms:
+                return
+
+            
+            if net.ball_hits_net((self.x, self.y, self.z), self.radio):
+
+                # 2. Activar cooldown: Registrar el golpe.
+                self._last_net_hit = now
+
+                # Detención total en el plano horizontal (x, y)
+                self.vx = 0.0 # Detiene el movimiento lateral (eje X)
+                self.vy = 0.0 # Detiene el movimiento de profundidad (eje Y)
+                self.vz *= 0.2
+                net_y_pos = net.y # 105.0, la Y central de la red.
+                CLEARANCE = 5.0 # Aumento del margen de seguridad (ej: 3 unidades)
+                net_y_pos = 105.0
+                
+                # 3. 🔑 CORRECCIÓN CRÍTICA: Reajuste Geométrico (¡No usar self.vy!)
+                if self.y > net_y_pos:
+                    # Pelota en el lado Y positivo (Jugador 1), empujar hacia afuera.
+                    self.y = net_y_pos - (self.radio + CLEARANCE) 
+                else: 
+                    # Pelota en el lado Y negativo (Jugador 2), empujar hacia afuera.
+                    self.y = net_y_pos + self.radio + CLEARANCE
+                    
+                print(f"🔴 Rebote en la red. Posición final (x,y,z): ({self.x:.2f}, {self.y:.2f}, {self.z:.2f})")
 
 
-    def hit_by_player(self, player_pos: Tuple[float, float], target_zone: Optional[str] = None):
-        """
-        Simula el golpe de un jugador con opción de apuntar a una zona del campo rival.
-        target_zone puede ser: 'left', 'center' o 'right'
-        """
-        print(f"🎾 Pelota golpeada desde {player_pos}")
-
-        bx, by = self.x, self.y
-
-        # Determinar hacia qué lado va el golpe
-        if player_pos[1] > by:
-            # Jugador 1 (abajo) golpea → apuntar al campo superior
-            side = "top"
+    def hit_by_player(self, player_pos, zone="center", is_player2=False):
+        field = self.game.field
+        
+        if zone not in field.zones:
+            print(f"[⚠️] Zona '{zone}' no encontrada, usando centro por defecto.")
+            target_x, target_y = 0, 0
         else:
-            side = "bottom"
+            zx, zy, zw, zh = field.zones[zone]
 
-        # Si tenés acceso al campo, usalo
-        if hasattr(self.game, "field"):
-            tx, ty = self.game.field.get_target_zone(side, target_zone or "center")
-        else:
-            # fallback simple si no hay field
-            tx, ty = bx + random.uniform(-200, 200), by + (-200 if side == "top" else 200)
+            # Elegir un punto aleatorio dentro de la zona destino
+            target_x = zx + random.uniform(0.2, 0.8) * zw
+            target_y = zy + random.uniform(0.2, 0.8) * zh
 
-        # Vector de dirección
-        dx = tx - bx
-        dy = ty - by
-        dist = max((dx**2 + dy**2) ** 0.5, 1)
-        dir_x, dir_y = dx / dist, dy / dist
+        # --- Calcular dirección del golpe ---
+        dx = target_x - self.x
+        dy = target_y - self.y
+        dz = 0 - self.z  # hacia el suelo
 
-        # Velocidad y altura
-        speed = random.uniform(7, 9)
-        self.vx = dir_x * speed
-        self.vy = dir_y * speed
-        self.vz = random.uniform(7, 9)
+        dist = math.sqrt(dx**2 + dy**2)
+        if dist == 0:
+            dist = 1e-5
 
-        print(f"📍 Objetivo {side}-{target_zone or 'center'} → ({tx:.1f}, {ty:.1f})")
-        print(f"📐 Dirección: vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
+        # --- Ajustar fuerza y velocidad del golpe ---
+        speed = random.uniform(8, 11)
+        self.vx = (dx / dist) * speed
+        self.vy = (dy / dist) * speed
+        self.vz = random.uniform(7, 10)
+
+        print(f"🎾 Golpe de {'P2' if is_player2 else 'P1'} hacia '{zone}' → ({target_x:.1f}, {target_y:.1f}) con vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
