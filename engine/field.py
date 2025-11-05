@@ -53,17 +53,31 @@ class Field:
         self.width = width
         self.height = height
 
-        # Mantengo tu net_y como lo tenías (no rompemos semántica en este paso)
+        # === Límites y centro del campo (coordenadas lógicas del mundo) ===
+        self.left = 0
+        self.top = 0
+        self.right = width
+        self.bottom = height
+        self.center_x = self.left + self.width / 2
+        self.center_y = self.top + self.height / 2
+
+        # net
         self.net_y = (height // 2) + 64
         self.net_height = 50
         self.net = Net(self)
 
         # --- Zonas lógicas (mundo) ---
         self.zones = {
-            "back_left":  (0, 0, width, height * 0.23),
-            "front_left": (0, height * 0.23, width, height * 0.27),
-            "front_right": (0, height * 0.50, width, height * 0.28),
-            "back_right": (0, height * 0.78, width, height * 0.23),
+            "deep_back_left": (-45, 230, 150, 125),
+            "back_left":  (-45, 105, 150, 125),
+            "deep_front_left": (-45, -145, 150, 125),
+            "front_left": (-45, -20, 150, 125),
+            "deep_front_right": (105, -145, 150, 125),
+            "front_right": (105, -20, 150, 125),
+            "deep_back_right": (105, 230, 150, 125),
+            "back_right": (105, 105, 150, 125),
+            "center_back": (30, 105, 150, 250),
+            "center_front": (30, -145, 150, 250),
         }
 
         # Offset de centrado
@@ -218,7 +232,50 @@ class Field:
             self._last_court_rect = self.get_court_rect(screen)
 
         # --- Zonas isométricas (dibujo original) ---
-        for name, (x, y, w, h) in self.zones.items():
+        # === DEBUG VISUAL DE ZONAS ===
+        debug = True  # 🔧 activar/desactivar rápidamente
+
+        if debug:
+            color_map = {
+                "deep_back_left": (128, 0, 0),      # rojo oscuro
+                "back_left": (255, 0, 0),           # rojo
+                "deep_front_left": (0, 128, 0),     # verde oscuro
+                "front_left": (0, 255, 0),          # verde
+                "deep_front_right": (0, 0, 128),    # azul oscuro
+                "front_right": (0, 0, 255),         # azul
+                "deep_back_right": (128, 128, 0),   # amarillo oscuro
+                "back_right": (255, 255, 0),        # amarillo
+                "center_back": (0, 0, 0),
+                "center_front": (250, 250, 250),
+            }
+            for name, (x, y, w, h) in self.zones.items():
+                # Calcular esquinas del rectángulo en coordenadas del mundo
+                corners = [
+                    (x, y),
+                    (x + w, y),
+                    (x + w, y + h),
+                    (x, y + h)
+                ]
+
+                # Convertir cada punto a coordenadas isométricas
+                iso_points = []
+                for wx, wy in corners:
+                    iso_x, iso_y = world_to_iso(wx - self.width / 2, wy - self.height / 2)
+                    iso_x += screen.get_width() // 2
+                    iso_y += screen.get_height() // 3
+                    iso_points.append((iso_x, iso_y))
+
+                # Dibujar el contorno isométrico
+                pygame.draw.polygon(screen, color_map[name], iso_points, 2)
+
+                # Etiqueta de zona
+                font = pygame.font.SysFont("arial", 16)
+                label = font.render(name, True, color_map[name])
+                lx = sum(p[0] for p in iso_points) / 4
+                ly = sum(p[1] for p in iso_points) / 4
+                screen.blit(label, (lx - label.get_width() // 2, ly - label.get_height() // 2))
+
+        """for name, (x, y, w, h) in self.zones.items():
             corners = [
                 to_pixels(*world_to_screen(x, y),       SCALE, self.offset_x, self.offset_y),
                 to_pixels(*world_to_screen(x + w, y),   SCALE, self.offset_x, self.offset_y),
@@ -235,7 +292,7 @@ class Field:
                 "back_right": (255, 0, 0),
             }.get(name, (255, 255, 255))
 
-            pygame.draw.polygon(screen, color, corners, 2)
+            pygame.draw.polygon(screen, color, corners, 2)"""
 
         #self.net.update()
         #self.net.draw_debug(screen, SCALE, self.offset_x, self.offset_y)

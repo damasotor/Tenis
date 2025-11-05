@@ -30,8 +30,8 @@ class Game:
 
         # Mundo
         self.field = Field(6, 10)
-        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False)# >x = Más a la derecha, >y = Más atrás
-        self.jugador2 = Player(385, ALTO / 2 - 450, field=self.field, jugador2=True)
+        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False, game=self)# >x = Más a la derecha, >y = Más atrás
+        self.jugador2 = Player(385, ALTO / 2 - 450, field=self.field, jugador2=True, game=self)
 
         # Reloj
         self.reloj = pygame.time.Clock()
