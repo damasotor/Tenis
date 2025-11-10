@@ -89,6 +89,9 @@ class Field:
         # Cache de court rect del último draw
         self._last_court_rect: Optional[pygame.Rect] = None
 
+        # Debug opcional (podés setearlo desde Game)
+        self.debug = False
+
         # -------- Textura de fondo de la cancha --------
         # Soportamos ruta custom (texture_path) o tu ruta por defecto en español.
         if texture_path:
@@ -140,8 +143,7 @@ class Field:
 
     def get_net_rect(self, screen: pygame.Surface) -> pygame.Rect:
         """
-        Rect que representa la red (vertical y centrado).
-        Si luego necesitás red isométrica real, cambiaremos a colisión custom.
+        Rect que representa la red (vertical y centrado). Debe coincidir con lo que se dibuja.
         """
         court = self.get_court_rect(screen)
         net_w = max(4, int(court.width * 0.008))
@@ -158,7 +160,7 @@ class Field:
         return 0, self.width * scale_x, 0, self.height * scale_y
     
     def draw_debug_bounds(self, surface: pygame.Surface) -> None:
-        """Overlay de depuración para ver court y red."""
+        """Overlay de depuración para ver court, red y cinta."""
         court = self.get_court_rect(surface)
         #net = self.get_net_rect(surface)
         pygame.draw.rect(surface, (30, 200, 255), court, width=2)  # contorno court
@@ -233,7 +235,7 @@ class Field:
 
         # --- Zonas isométricas (dibujo original) ---
         # === DEBUG VISUAL DE ZONAS ===
-        debug = True  # 🔧 activar/desactivar rápidamente
+        debug = False  # 🔧 activar/desactivar rápidamente
 
         if debug:
             color_map = {
@@ -305,7 +307,7 @@ class Field:
         Devuelve la línea de la red en coordenadas del mundo (x, y).
         """
         return (0, self.net_y), (self.width, self.net_y)
-    
+
     def get_net_iso_line(self):
         """
         Devuelve la línea de la red en coordenadas de pantalla isométricas (píxeles).
@@ -316,19 +318,20 @@ class Field:
         p1 = to_pixels(*iso1, SCALE, self.offset_x, self.offset_y)
         p2 = to_pixels(*iso2, SCALE, self.offset_x, self.offset_y)
         return p1, p2
-    
+
     def ball_hits_net(self, ball_pos_screen: Tuple[float, float], ball_radius: float = 5.0) -> bool:
         """
         Determina si la pelota cruza la red isométrica.
-        Usa el signo del producto cruzado para detectar cambio de lado.
+        (Se mantiene por compatibilidad con lógica antigua de pruebas; la colisión principal
+         ahora la hacemos contra get_net_rect / get_net_tape_rect en Ball.update()).
         """
         (x1, y1), (x2, y2) = self.get_net_iso_line()
         bx, by = ball_pos_screen
 
-        # Distancia vertical del punto a la línea (en 2D)
+        # Distancia punto-línea en 2D
         num = abs((y2 - y1) * bx - (x2 - x1) * by + x2*y1 - y2*x1)
         den = ((y2 - y1)**2 + (x2 - x1)**2)**0.5
-        dist = num / den
+        dist = num / max(1e-6, den)
 
         # Si la pelota está a menos de cierto margen (radio) => colisión
         return dist <= ball_radius

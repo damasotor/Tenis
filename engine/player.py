@@ -69,8 +69,6 @@ class Player(GameObject):
         self.swing_timer = 0
         self.swing_duration = 600  # milisegundos de ventana para golpear
 
-
-        self.swing_cooldown = 600    # ms
         self.swing_duration = 400    # ms (duración efectiva del golpe)
         self.swing_delay = 250        # ms antes del impacto real (ajustable)
         self.swing_cooldown = 600     # ms antes de poder iniciar otro golpe
@@ -142,7 +140,9 @@ class Player(GameObject):
 
         # Si está golpeando, movemos más la raqueta hacia afuera
         if self.estado == "golpeando":
-            base_offset *= 60.6  # podés ajustar este valor (1.6 = 60% más lejos)
+            base_offset *= 1.6   # reach aumentado pero razonable
+            # Seguridad extra: limitar el reach si alguien lo re-tunea
+            base_offset = max(min(base_offset, 2.0), 0.8)
 
         # Aplicar dirección
         if mirando == "right":
@@ -525,4 +525,3 @@ class Player(GameObject):
         # ajustá tolerancia si querés
         # print(f"💨 Sin colisión con pelota. Distancia pantalla={dist:.1f}, tolerancia=25")
         return False
-
