@@ -300,7 +300,7 @@
                 "animation": "golpe-derecha2"
             }
         ],
-        "saque-01-P1": [
+        "Saque-01-P1": [
             {
                 "x": 2400,
                 "y": 0,
@@ -338,7 +338,7 @@
                 "animation": "golpe-derecha2"
             }
         ],
-        "saque-02-P1": [
+        "Saque-02-P1": [
             {
                 "x": 2800,
                 "y": 0,
@@ -367,7 +367,7 @@
                 "animation": "golpe-derecha2"
             }
         ],
-        "saque-01-P2": [
+        "Saque-01-P2": [
             {
                 "x": 3100,
                 "y": 0,
@@ -396,7 +396,7 @@
                 "animation": "golpe-derecha2"
             }
         ],
-        "saque-02-P2": [
+        "Saque-02-P2": [
             {
                 "x": 3400,
                 "y": 0,

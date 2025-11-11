@@ -71,11 +71,11 @@ class Ball(pygame.sprite.Sprite):
         # Altura en el eje vertical (z)
         self.z = 80
         # Velocidades
-        self.vx = random.choice([-5, 5])
-        self.vy = random.choice([-2, 2])
+        self.vx = 0
+        self.vy = 0
         self.vz = 0
         # Radio visual
-        self.radio = 10
+        self.radio = 7
         self.image = pygame.Surface((self.radio * 2, self.radio * 2), pygame.SRCALPHA)
         # 💡 CAMBIOS NUEVOS: Cooldown para evitar rebotes múltiples
         self._net_cd_ms = 100        # 100 milisegundos de espera
@@ -86,6 +86,11 @@ class Ball(pygame.sprite.Sprite):
         # 💡 CAMBIOS NUEVOS: Cooldown para evitar rebotes múltiples
         self._net_cd_ms = 100        # 100 milisegundos de espera
         self._last_net_hit = -10**9  # Inicializa el último golpe en un tiempo muy pasado
+
+        self.is_serving = False
+        self.serve_stage = None   # "toss", "falling", "served", "fault"
+        self.server = None
+        self.bounce_count = 0
 
     @property
     def screen_x(self) -> float:
@@ -309,8 +314,93 @@ class Ball(pygame.sprite.Sprite):
                 self.game.audio.play_sound("crowd_ooh")
             self.game.audio.unduck_music()
 
+    
+    def prepare_for_serve(self, server, x, y):
+        """Coloca la pelota lista para ser servida, sin movimiento."""
+        self.is_serving = True
+        self.serve_stage = "ready"
+        self.server = server
+        
+        # Convertir coordenadas de pantalla → mundo
+        world_x, world_y = screen_to_world(x, y)
+        self.x = world_x
+        self.y = world_y
+
+        self.z = 0
+        self.vx = self.vy = self.vz = 0
+        print(f"🎾 Pelota lista para saque de {server} en ({self.x:.1f}, {self.y:.1f})")
+
+
+    # ----------------- Lógica de saque (toss y golpe) -----------------
+    def start_toss(self, server_id: str, start_x: float, start_y: float):
+        """
+        Inicia el lanzamiento de la pelota (toss) desde el jugador que saca.
+        La pelota sube y luego cae, esperando el golpe.
+        """
+        self.server_id = server_id
+        self.x = start_x
+        self.y = start_y
+        print("Posicion pelota: ", self.x, self.y)
+        self.z = 0  # empieza en el suelo
+        self.vx = 0
+        self.vy = 0
+        self.vz = 10  # impulso inicial hacia arriba
+        self.serve_stage = "toss"
+        self.waiting_hit = True
+        self.out_of_bounds = False
+        print(f"🎾 Toss iniciado por {server_id} en ({start_x:.1f}, {start_y:.1f})")
+
+    def update_toss(self):
+        """
+        Actualiza la física del lanzamiento de saque (toss).
+        """
+        # Aplicar gravedad
+        self.z += self.vz
+        self.vz -= 0.6  # gravedad vertical
+
+        # Detectar cambio de dirección (empieza a caer)
+        if self.vz <= 0 and self.serve_stage == "toss":
+            self.serve_stage = "falling"
+            print("⬇️ La pelota empieza a caer...")
+
+        # Si toca el suelo sin ser golpeada → falta
+        if self.z <= 0 and self.waiting_hit:
+            self.z = 0
+            self.vz = 0
+            self.waiting_hit = False
+            self.serve_stage = "fault"
+            print("❌ Saque fallido (la pelota cayó sin ser golpeada)")
+            if hasattr(self.game, "audio"):
+                self.game.audio.play_sound("out_whistle")
+                if "crowd_ahh" in self.game.audio.sounds:
+                    self.game.audio.play_sound("crowd_ahh")
+
 
     def update(self):
+        # --------------------------
+        # ETAPAS DEL SAQUE
+        # --------------------------
+        if getattr(self, "serve_stage", None) in ("toss", "falling"):
+            self.update_toss()
+            iso_x, iso_y = world_to_iso(self.x, self.y, self.z)
+            self.rect.center = (iso_x + ANCHO // 2, iso_y + ALTO // 3)
+            return
+
+        # --------------------------
+        # PELOTA EN SAQUE "LISTO"
+        # --------------------------
+        if self.serve_stage == "ready":
+            # Todavía quieta en la mano
+            iso_x, iso_y = world_to_iso(self.x, self.y, self.z)
+            self.rect.center = (iso_x + ANCHO // 2, iso_y + ALTO // 3)
+            return
+
+
+        if self.serve_stage == "fault":
+            # reposicionar para el próximo saque
+            print("FALTA!")
+            #self.reset_position_for_serve(self.server)
+
         # ===== Movimiento en el mundo =====
         self.x += self.vx
         self.y += self.vy
@@ -386,6 +476,11 @@ class Ball(pygame.sprite.Sprite):
 
 
     def hit_by_player(self, player_pos, zone="center", is_player2=False):
+        if getattr(self, "serve_stage", None) in ("toss", "falling"):
+            self.waiting_hit = False
+            self.serve_stage = "served"  # vuelve a modo normal
+            self.start_rally()
+
         field = self.game.field
         
         if zone not in field.zones:
@@ -408,9 +503,16 @@ class Ball(pygame.sprite.Sprite):
             dist = 1e-5
 
         # --- Ajustar fuerza y velocidad del golpe ---
-        speed = random.uniform(8, 11)
-        self.vx = (dx / dist) * speed
-        self.vy = (dy / dist) * speed
-        self.vz = random.uniform(7, 10)
+        # --- Ajustar fuerza y velocidad del golpe ---
+        base_speed = random.uniform(8, 11)
+
+        # Si el vz es más bajo, compensamos con un poco más de fuerza horizontal
+        horizontal_boost = 1.5 if base_speed < 9 else 1.0
+
+        self.vx = (dx / dist) * base_speed * horizontal_boost
+        self.vy = (dy / dist) * base_speed * horizontal_boost
+
+        # 🔹 Altura más controlada, pero suficiente para pasar la red
+        self.vz = random.uniform(5, 7)
 
         print(f"🎾 Golpe de {'P2' if is_player2 else 'P1'} hacia '{zone}' → ({target_x:.1f}, {target_y:.1f}) con vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")

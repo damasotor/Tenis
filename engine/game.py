@@ -305,6 +305,46 @@ class Game:
 
                     if evento.key == pygame.K_F3 and self.debug_overlays:
                         self.show_bounce_debug = not self.show_bounce_debug
+                    # 🎾 Saque jugador 1 y jugador 2
+                    # --- Jugador 1 ---
+                    if evento.key == pygame.K_SPACE:
+                        # Asegurarse de que haya una pelota principal
+                        ball = self._ball_main
+                        if ball is not None:
+                            # Si la pelota está lista para sacar → lanzar hacia arriba
+                            if getattr(ball, "serve_stage", "ready") == "ready":
+                                # Posición inicial del jugador 1 (desde world_x, world_y)
+                                start_x, start_y = world_to_screen(self.jugador1.world_x, self.jugador1.world_y)
+                                ball.start_toss("P1", start_x - 20, start_y - 60)
+                                self.jugador1.iniciar_saque()  # animación del lanzamiento
+                            # Si la pelota ya fue lanzada → intentar golpear
+                            elif getattr(ball, "serve_stage", None) in ("toss", "falling"):
+                                if self.jugador1:
+                                    self.jugador1.realizar_saque()
+                                    ball.hit_by_player((self.jugador1.world_x, self.jugador1.world_y), zone=self.jugador1.pending_direction, is_player2=self.jugador1.is_player2)
+                                else:
+                                    self.jugador2.realizar_saque()
+                                    ball.hit_by_player((self.jugador2.world_x, self.jugador2.world_y), zone=self.jugador2.pending_direction, is_player2=self.jugador2.is_player2)
+                        else:
+                            print("[WARN] No hay pelota principal activa para el saque.")
+
+                    # --- Jugador 2 ---
+                    if evento.key == pygame.K_f:
+                        # Asegurarse de que haya una pelota principal
+                        ball = self._ball_main
+                        if ball is not None:
+                            # Si la pelota está lista para sacar → lanzar hacia arriba
+                            if getattr(ball, "serve_stage", "ready") == "ready":
+                                start_x = self.jugador2.world_x
+                                start_y = self.jugador2.world_y
+                                ball.start_toss("P2", start_x, start_y)
+                                self.jugador2.iniciar_saque()  # animación del lanzamiento
+                            # Si la pelota ya fue lanzada → intentar golpear
+                            elif getattr(ball, "serve_stage", None) in ("toss", "falling"):
+                                self.jugador2.golpear_saque()
+                                ball.hit_by_player()
+                        else:
+                            print("[WARN] No hay pelota principal activa para el saque.")
 
                     # Mezcla rápida
                     if evento.key == pygame.K_1:
@@ -686,7 +726,9 @@ class Game:
         cx, cy = self.jugador1.x, self.jugador1.y
         wx, wy = world_to_screen(cx, cy)
         self.balls.empty()
-        ball = Ball(wx + 15, wy, game=self, vx=5, vy=-5)
+        ball = Ball(wx - 20, wy - 60, game=self, vx=0, vy=0)
+        ball.z = 50
+        ball.serve_stage = "ready"
         self.balls.add(ball)
         self._ball_main = ball
         ball.start_rally()

@@ -80,7 +80,7 @@ class SimpleTennisAI:
         if self.side == "top":
             home_x, home_y = 470, -100   # posición de espera del jugador 2
 
-            print("JUGADOR IA ", self.player.world_x, self.player.world_y)
+            #print("JUGADOR IA ", self.player.world_x, self.player.world_y)
         else:
             home_x, home_y = 30, 400   # posición de espera del jugador 1
 

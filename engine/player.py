@@ -125,6 +125,14 @@ class Player(GameObject):
         self.target_zone = random.choice(["deep_back_left", "back_left", "deep_front_left", "front_left",
                                         "deep_front_right", "front_right", "deep_back_right", "back_right"])
 
+        # --- Estados de saque --- 
+        self.is_serving = False # Si está en modo de saque 
+        self.serve_stage = None # "toss" o "hit" 
+        self.serve_start_time = 0 
+        self.serve_duration_toss = 1600 # ms (duración del lanzamiento) 
+        self.serve_duration_hit = 900 # ms (duración del golpe) 
+        self.can_serve = True # si puede iniciar un saque (luego lo controla el juego)
+
         self._project_to_screen()
 
 
@@ -237,6 +245,10 @@ class Player(GameObject):
         moved = False
         current_time = pygame.time.get_ticks()
 
+        # --- BLOQUEAR movimiento y animaciones si está en modo saque ---
+        if getattr(self, "is_serving", False):
+            # No mover ni sobreescribir animaciones durante el saque
+            return
         # =========================
         # CONTROL DE SWING / GOLPE
         # =========================
@@ -439,18 +451,66 @@ class Player(GameObject):
 
         self._project_to_screen()
 
+    def iniciar_saque(self):
+        if getattr(self, "is_serving", False):
+            return  # Ya está sirviendo, no reiniciar
+
+        self.is_serving = True
+        self.serve_stage = "toss"
+        self.current_animation = "Saque-01-P2" if self.is_player2 else "Saque-01-P1"
+        self.serve_start_time = pygame.time.get_ticks()
+        self.serve_duration_toss = 600  # milisegundos aprox.
+        print("🎾 Inicia saque (toss)")
+
+    def realizar_saque(self):
+        if self.serve_stage != "ready_for_hit":
+            return  # Aún no terminó el lanzamiento
+
+        self.serve_stage = "hit"
+        self.current_animation = "Saque-02-P2" if self.is_player2 else "Saque-02-P1"
+        self.serve_start_time = pygame.time.get_ticks()
+        self.serve_duration_hit = 400
+        print("💥 Golpe de saque iniciado")
+
     def update(self):
         self._project_to_screen()
         # Llamar al update de GameObject si existe
-        try:
-            super().update()  # type: ignore
-        except Exception:
-            pass
+        if not getattr(self, "is_serving", False):
+            try:
+                super().update()
+            except Exception:
+                pass
         # hit flash timeout
-        if self._hit_flash_active:
-            now = pygame.time.get_ticks()
-            if now - self._hit_flash_start > self._hit_flash_duration:
-                self._hit_flash_active = False
+        if getattr(self, "is_serving", False):
+            current_time = pygame.time.get_ticks()
+
+            # --- Etapa 1: lanzamiento del saque ---
+            if self.serve_stage == "toss":
+                dur = getattr(self, "serve_duration_toss", 0)
+                if current_time - self.serve_start_time >= dur:
+                    self.serve_stage = "ready_for_hit"
+                    print("⏳ Listo para golpe de saque")
+                    # Quedarse en el último frame del toss
+                    frames = self.animations.get(self.current_animation, [])
+                    if frames:
+                        self.frame_index = len(frames) - 1  # último frame
+                    # Evitar que el animator la siga loopando
+                    self.anim_timer = 0
+                    return
+
+            # --- Etapa 2: golpe del saque ---
+            elif self.serve_stage == "hit":
+                dur = getattr(self, "serve_duration_hit", 0)
+                if current_time - self.serve_start_time >= dur:
+                    # Fin del golpe → volver a idle
+                    self.is_serving = False
+                    self.can_serve = False
+                    self.serve_stage = None
+                    self.current_animation = "idle-P2" if self.is_player2 else "idle"
+                    print("✅ Saque completo (una sola vez)")
+                else:
+                    # No reiniciar la animación — dejarla avanzar naturalmente
+                    pass
 
     def draw(self, surface):
         if not self.sprite_sheet or not self.animations or not self.rect:
