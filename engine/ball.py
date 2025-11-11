@@ -513,6 +513,6 @@ class Ball(pygame.sprite.Sprite):
         self.vy = (dy / dist) * base_speed * horizontal_boost
 
         # 🔹 Altura más controlada, pero suficiente para pasar la red
-        self.vz = random.uniform(5, 7)
+        self.vz = random.uniform(6, 8)
 
         print(f"🎾 Golpe de {'P2' if is_player2 else 'P1'} hacia '{zone}' → ({target_x:.1f}, {target_y:.1f}) con vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
