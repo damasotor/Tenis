@@ -7,7 +7,7 @@ from engine.field import Field
 from engine.utils.colors import AZUL_OSCURO, BLANCO
 from engine.utils.screen import ANCHO, ALTO, world_to_screen
 from engine.audio import AudioManager
-from engine.ball import Ball
+from engine.ball import Ball, screen_to_world
 
 # Debug overlays (pique IN/OUT)
 try:
@@ -329,12 +329,8 @@ class Game:
                                 self.jugador1.iniciar_saque()  # animación del lanzamiento
                             # Si la pelota ya fue lanzada → intentar golpear
                             elif getattr(ball, "serve_stage", None) in ("toss", "falling"):
-                                if self.jugador1:
-                                    self.jugador1.realizar_saque()
-                                    ball.hit_by_player((self.jugador1.world_x, self.jugador1.world_y), zone=self.jugador1.pending_direction, is_player2=self.jugador1.is_player2)
-                                else:
-                                    self.jugador2.realizar_saque()
-                                    ball.hit_by_player((self.jugador2.world_x, self.jugador2.world_y), zone=self.jugador2.pending_direction, is_player2=self.jugador2.is_player2)
+                                self.jugador1.realizar_saque()
+                                ball.hit_by_player((self.jugador1.world_x, self.jugador1.world_y), zone=self.jugador1.pending_direction, is_player2=self.jugador1.is_player2)
                         else:
                             print("[WARN] No hay pelota principal activa para el saque.")
 
@@ -345,14 +341,15 @@ class Game:
                         if ball is not None:
                             # Si la pelota está lista para sacar → lanzar hacia arriba
                             if getattr(ball, "serve_stage", "ready") == "ready":
-                                start_x = self.jugador2.world_x
-                                start_y = self.jugador2.world_y
-                                ball.start_toss("P2", start_x, start_y)
+                                #start_x = self.jugador2.world_x
+                                #start_y = self.jugador2.world_y
+                                start_x, start_y = world_to_screen(self.jugador2.world_x, self.jugador2.world_y)
+                                ball.start_toss("P2", start_x - 530, start_y - 250)
                                 self.jugador2.iniciar_saque()  # animación del lanzamiento
                             # Si la pelota ya fue lanzada → intentar golpear
                             elif getattr(ball, "serve_stage", None) in ("toss", "falling"):
-                                self.jugador2.golpear_saque()
-                                ball.hit_by_player()
+                                self.jugador2.realizar_saque()
+                                ball.hit_by_player((self.jugador2.world_x, self.jugador2.world_y), zone=self.jugador2.pending_direction, is_player2=self.jugador2.is_player2)
                         else:
                             print("[WARN] No hay pelota principal activa para el saque.")
 

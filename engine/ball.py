@@ -271,7 +271,7 @@ class Ball(pygame.sprite.Sprite):
             self.waiting_hit = False
             self.serve_stage = "fault"
             print("❌ Saque fallido (la pelota cayó sin ser golpeada)")
-            self.game.next_serve()  # o algún método de reinicio
+            self.on_out()  # o algún método de reinicio
 
         if self.z <= 0 and self.waiting_hit:
             self.z = 0
