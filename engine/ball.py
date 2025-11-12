@@ -426,7 +426,7 @@ class Ball(pygame.sprite.Sprite):
         field = self.game.field
         
         if zone not in field.zones:
-            print(f"[⚠️] Zona '{zone}' no encontrada, usando centro por defecto.")
+            #print(f"[⚠️] Zona '{zone}' no encontrada, usando centro por defecto.")
             target_x, target_y = 0, 0
         else:
             zx, zy, zw, zh = field.zones[zone]
@@ -453,4 +453,4 @@ class Ball(pygame.sprite.Sprite):
         # Altura suficiente para pasar la red
         self.vz = random.uniform(6, 8)
 
-        print(f"🎾 Golpe de {'P2' if is_player2 else 'P1'} hacia '{zone}' → ({target_x:.1f}, {target_y:.1f}) con vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
+        #print(f"🎾 Golpe de {'P2' if is_player2 else 'P1'} hacia '{zone}' → ({target_x:.1f}, {target_y:.1f}) con vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")

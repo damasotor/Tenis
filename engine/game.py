@@ -889,7 +889,7 @@ class Game:
         wx, wy = world_to_screen(cx, cy)
         self.balls.empty()
         ball = Ball(wx - 20, wy - 60, game=self, vx=0, vy=0)
-        ball.z = 50
+        ball.z = 0
         ball.serve_stage = "ready"
         self.balls.add(ball)
         self._ball_main = ball
