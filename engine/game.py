@@ -813,12 +813,23 @@ class Game:
 
         self.score.point_for(who)
 
+        
         gw = getattr(self.score, "game_winner", None)
         if gw is not None:
-            if gw == 1:
-                self._enter_victoria()
+            # Si la IA es el jugador 2 (top)
+            if self.modo == "1P":
+                if gw == "P1":
+                    # Ganó el jugador humano
+                    self._enter_victoria()
+                elif gw == "P2":
+                    # Ganó la IA
+                    self._enter_gameover()
             else:
-                self._enter_gameover()
+                # En 2P, P1 gana = victoria, P2 gana = game over (o podrías hacer ambos victoria)
+                if gw == "P1":
+                    self._enter_victoria()
+                elif gw == "P2":
+                    self._enter_gameover()
             return
 
         self._start_new_rally()
