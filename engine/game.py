@@ -29,13 +29,13 @@ except Exception:
 
 # Puntuación
 try:
-    from engine.rules.score import ScoreManager
+    from engine.score import ScoreManager
 except Exception:
     ScoreManager = None  # type: ignore
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, player1_name="P1", player2_name="P2", screen=None):
         # Ventana
         self.PANTALLA = pygame.display.set_mode((ANCHO, ALTO))
         pygame.display.set_caption('Tennis Isométrico en construcción...')
@@ -77,8 +77,8 @@ class Game:
         self.font_small = pygame.font.Font(None, 32)
         self.font_hud   = pygame.font.Font(None, 38)
 
-        # Score
-        self.score = ScoreManager() if ScoreManager else None
+        # score puntaje en español lindo
+        self.score = ScoreManager("P1", "P2", screen=self.PANTALLA) if ScoreManager else None
 
         # Pelotas
         self.balls = pygame.sprite.Group()
