@@ -1,6 +1,6 @@
 # README — Tennis Isométrico (Pygame)
 
-Guía rápida y clara para levantar el proyecto en **Windows, macOS o Linux**.
+Guía para levantar el proyecto en **Windows, macOS o Linux**.
 
 ## 1) Requisitos
 
@@ -22,7 +22,7 @@ cd <tu-repo>
 
 ## 3) Instalación y ejecución rápida
 
-### Desde la raíz del proyecto, ejecutá:
+### Desde la raíz del proyecto, ejecutá
 
 ```bash
 # Crear entorno limpio
@@ -47,6 +47,7 @@ python3 main.py
   - Valores: `1` habilita, `0` deshabilita
 
 Ejemplos:
+
 ```bash
 # macOS/Linux
 export VJ2D_MODO=1P
@@ -63,17 +64,20 @@ python main.py
 ```
 
 Al primer arranque se crean o leen:
+
 - `assets/audio_config.json` para volúmenes.
 - `assets/game_config.json` para el modo 1P/2P.
 
 ## 6) Controles
 
 ### Menú principal
+
 - `↑/↓` mover
 - `Enter` seleccionar
 - `Esc` salir
 
 ### Opciones
+
 - Fila seleccionada queda **resaltada** con una banda clara que cubre **etiqueta + slider + porcentaje**.
 - `↑/↓` cambiar de fila
 - `←/→` ajustar valor
@@ -82,6 +86,7 @@ Al primer arranque se crean o leen:
   - **VOLVER** descarta cambios y vuelve al menú
 
 ### Partida
+
 - `WASD` o flechas para mover jugadores humanos
 - `Espacio` secuencia de saque P1
 - `F` secuencia de saque P2 (debug o 2P)
@@ -89,6 +94,7 @@ Al primer arranque se crean o leen:
   - En pausa: `Esc/P` continuar, `Enter` volver al menú
 
 ### Atajos y debug
+
 - `F1` mostrar límites y debug de cancha
 - `F3` alternar overlay de botes si está disponible
 - `M` mute global
@@ -118,10 +124,12 @@ Al primer arranque se crean o leen:
 
 - **No suena el audio en Linux**  
   Instalar dependencias de SDL y ALSA:
+
   ```bash
   sudo apt update
   sudo apt install libsdl2-mixer-2.0-0 libasound2
   ```
+
 - **Pygame no encuentra la música**  
   Verificá rutas dentro de `assets/audio/` y nombres de archivo.
 - **Fuentes no encontradas**  
