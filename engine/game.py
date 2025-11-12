@@ -81,6 +81,14 @@ class Game:
         self.font_small = pygame.font.Font(None, 32)
         self.font_hud   = pygame.font.Font(None, 38)
 
+        # Fondo del menú principal
+        bg_path = os.path.join("assets", "backgrounds", "menu_bg.jpg")
+        self.menu_bg = None
+        if os.path.exists(bg_path):
+            self.menu_bg = pygame.image.load(bg_path).convert()
+            self.menu_bg = pygame.transform.scale(self.menu_bg, (ANCHO, ALTO))
+
+
         # Score
         self.score = ScoreManager() if ScoreManager else None
 
@@ -555,16 +563,33 @@ class Game:
             pygame.event.post(pygame.event.Event(pygame.QUIT))
 
     def _draw_menu(self):
+        # Fondo personalizado si existe
+        if self.menu_bg:
+            self.PANTALLA.blit(self.menu_bg, (0, 0))
+        else:
+            # Fallback: dibujar la cancha por defecto
+            self.field.draw(self.PANTALLA)
+
+        # Capa semitransparente para contraste
+        overlay = pygame.Surface((ANCHO, ALTO), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 120))
+        self.PANTALLA.blit(overlay, (0, 0))
+
+        # Título
         title = self.font_title.render("Tennis Isométrico", True, BLANCO)
         self.PANTALLA.blit(title, title.get_rect(center=(ANCHO // 2, 140)))
+
+        # Menú textual (por ahora)
         for i, txt in enumerate(self.menu_items):
             sel = (i == self.menu_index)
             label = f"> {txt} <" if sel else f"  {txt}  "
             surf = self.font_item.render(label, True, BLANCO)
             self.PANTALLA.blit(surf, surf.get_rect(center=(ANCHO // 2, 260 + i * 60)))
-        modo_txt = f"Modo: {self.modo}  (env VJ2D_MODO=1P/2P)"
-        hint = self.font_small.render(modo_txt, True, BLANCO)
-        self.PANTALLA.blit(hint, hint.get_rect(center=(ANCHO // 2, 260 + len(self.menu_items)*60 + 30)))
+
+        # Pie con ayuda (sin mostrar variables de entorno)
+        hint = self.font_small.render("↑/↓ mover  •  Enter seleccionar  •  Esc salir", True, BLANCO)
+        self.PANTALLA.blit(hint, hint.get_rect(center=(ANCHO // 2, ALTO - 40)))
+
 
     def _draw_center_text(self, msg):
         surf = self.font_item.render(msg, True, BLANCO)
