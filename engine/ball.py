@@ -198,11 +198,11 @@ class Ball(pygame.sprite.Sprite):
         try:
             last = getattr(self.game, "last_hitter", None)
             if last == "P1":
-                self.game.point_for("P1")
-            elif last == "P2":
                 self.game.point_for("P2")
-            else:
+            elif last == "P2":
                 self.game.point_for("P1")
+            else:
+                self.game.point_for("P2")
         except Exception:
              pass
 
@@ -214,11 +214,11 @@ class Ball(pygame.sprite.Sprite):
         last = getattr(self.game, "last_hitter", None)
         if hasattr(self.game, "point_for"):
             if last == "P1":
-                self.game.point_for("P1")
-            elif last == "P2":
                 self.game.point_for("P2")
-            else:
+            elif last == "P2":
                 self.game.point_for("P1")
+            else:
+                self.game.point_for("P2")
 
     def on_point_scored(self):
         if hasattr(self.game, "audio"):
@@ -271,18 +271,7 @@ class Ball(pygame.sprite.Sprite):
             self.waiting_hit = False
             self.serve_stage = "fault"
             print("❌ Saque fallido (la pelota cayó sin ser golpeada)")
-
-            self.game.next_serve()  # o algún método de reinicio
-
-        if self.z <= 0 and self.waiting_hit:
-            self.z = 0
-            self.vz = 0
-            self.waiting_hit = False
-            self.serve_stage = "fault"
-            print("❌ Saque fallido (la pelota cayó sin ser golpeada)")
-            if hasattr(self.game, "audio"):
-                # Lógica de audio para falta
-                pass
+            self.on_out()  # o algún método de reinicio
 
     def update(self):
         # --------------------------
@@ -308,13 +297,70 @@ class Ball(pygame.sprite.Sprite):
         self.y += self.vy
         self.z += self.vz
 
+
+
         # Gravedad y rebote vertical
         self.vz -= 0.5
         if self.z <= 0:
             self.z = 0
             self.vz = -self.vz * 0.7
+
+            FIELD_LEFT = -50
+            FIELD_RIGHT = 250
+            FIELD_TOP = -150
+            FIELD_BOTTOM = 350
+
+            # --- Verificar si el pique fue dentro de la cancha ---
+            dentro_cancha = FIELD_LEFT <= self.x <= FIELD_RIGHT and FIELD_TOP <= self.y <= FIELD_BOTTOM
+            last = getattr(self.game, "last_hitter", None)
+            print("Piques: ", self.bounce_count)
+            if dentro_cancha:
+                self.bounce_count += 1
+                print(f"🏐 Pique #{self.bounce_count} dentro ({self.x:.1f}, {self.y:.1f})")
+
+                # Doble pique dentro = punto para el rival
+                if self.bounce_count >= 2:
+                    print("❌ Doble pique → punto para el rival")
+                    if last == "P1":
+                        self.game.point_for("P2")
+                    elif last == "P2":
+                        self.game.point_for("P1")
+                    else:
+                        self.game.point_for("P2")
+                    self.out_of_bounds = True
+                    return
+
+            else:
+                print(f"❌ Pelota picó fuera ({self.x:.1f}, {self.y:.1f})")
+
+                # Caso: primer pique fuera (no llegó a tocar dentro)
+                if self.bounce_count == 0:
+                    print("👉 Primer pique fuera → punto para el rival")
+                    if last == "P1":
+                        self.game.point_for("P2")
+                    elif last == "P2":
+                        self.game.point_for("P1")
+                    else:
+                        self.game.point_for("P2")
+                    self.out_of_bounds = True
+                    return
+
+                # Caso: ya picó dentro y luego sale → punto también para el rival
+                else:
+                    print("👉 Pelota salió después de pique → punto para el rival")
+                    if last == "P1":
+                        self.game.point_for("P2")
+                    elif last == "P2":
+                        self.game.point_for("P1")
+                    else:
+                        self.game.point_for("P2")
+                    self.out_of_bounds = True
+                    return
+
+            # --- Caso extra: rebote muy débil ---
             if abs(self.vz) < 0.8:
                 self.vz = 0
+
 
         # ===== Límites del campo (Out) =====
         FIELD_LEFT = -50
@@ -354,28 +400,6 @@ class Ball(pygame.sprite.Sprite):
                         self.y = net_y_pos - (self.radio + CLEARANCE)
                         
                     print(f"🔴 Rebote en la red. Posición final (x,y,z): ({self.x:.2f}, {self.y:.2f}, {self.z:.2f})")
-                    
-                    last = getattr(self.game, "last_hitter", None)
-                    
-                    if hasattr(self.game, "point_for") and last:
-                        if last == "P1":
-                            self.game.point_for("P2")
-                        else:
-                            self.game.point_for("P1")
-                    else:
-                        if hasattr(self.game, "point_for"):
-                            if last == "P1":
-                                self.game.point_for("P2")
-                            elif last == "P2":
-                                self.game.point_for("P1")
-                            else:
-                                self.game.point_for("P2")
-                    
-                    #detener fisica
-                    self.vx = self.vy = self.vz = 0
-                    self.out_of_bounds = True
-                    return
-
         # --------------------------------------------------------------------------
 
         # ===== Convertir a pantalla =====
@@ -407,6 +431,7 @@ class Ball(pygame.sprite.Sprite):
             self.serve_stage = "served"
             self.start_rally()
 
+        self.bounce_count = 0
         field = self.game.field
         
         if zone not in field.zones:
