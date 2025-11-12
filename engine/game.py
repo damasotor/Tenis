@@ -408,8 +408,6 @@ class Game:
                         ball = self._ball_main
                         if ball is not None:
                             if getattr(ball, "serve_stage", "ready") == "ready":
-                                #start_x = self.jugador2.world_x
-                                #start_y = self.jugador2.world_y
                                 start_x, start_y = world_to_screen(self.jugador2.world_x, self.jugador2.world_y)
                                 ball.start_toss("P2", start_x - 530, start_y - 250)
                                 self.jugador2.iniciar_saque()  # animación del lanzamiento
@@ -915,7 +913,7 @@ class Game:
         
         gw = getattr(self.score, "game_winner", None)
         if gw is not None:
-            # Si la IA es el jugador 2 (top)
+            # Si la IA es el jugador 2
             if self.modo == "1P":
                 if gw == "P1":
                     # Ganó el jugador humano
@@ -924,11 +922,11 @@ class Game:
                     # Ganó la IA
                     self._enter_gameover()
             else:
-                # En 2P, P1 gana = victoria, P2 gana = game over (o podrías hacer ambos victoria)
+                # En 2P, P1 o P2 gana = victoria
                 if gw == "P1":
                     self._enter_victoria()
                 elif gw == "P2":
-                    self._enter_gameover()
+                    self._enter_victoria()
             return
 
         self._start_new_rally()

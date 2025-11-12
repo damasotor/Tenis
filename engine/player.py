@@ -3,7 +3,7 @@ import math
 import random
 import pygame
 from engine.game_object import GameObject
-from engine.utils.screen import screen_to_world, world_to_screen  # proyección isométrica
+from engine.utils.screen import world_to_screen  # proyección isométrica
 
 # ⚙️ parámetros tunables centralizados (colisiones)
 try:
@@ -39,7 +39,6 @@ class Player(GameObject):
     - Sprint (Shift) y Walk (Ctrl)
     - Dos cajas (cuerpo + raqueta) tunables vía engine/config/collisions.py
     - Golpe direccional + hit flash y selección de efecto (flat/topspin/slice)
-    - Animator con FPS adaptables (si existe)
     """
 
     def __init__(self, x, y, field, jugador2=False, game=None):
@@ -148,8 +147,7 @@ class Player(GameObject):
 
         # Si está golpeando, movemos más la raqueta hacia afuera
         if self.estado == "golpeando":
-            base_offset *= 1.6   # reach aumentado pero razonable
-            # Seguridad extra: limitar el reach si alguien lo re-tunea
+            base_offset *= 1.6
             base_offset = max(min(base_offset, 2.0), 0.8)
 
         # Aplicar dirección
@@ -204,7 +202,7 @@ class Player(GameObject):
             mirando = getattr(self, "direccion1", "right")
 
         # desplazamiento lateral (en px)
-        offset_x = int(w * 0.3)  # podés ajustar 0.3 → cuanto más grande, más se separa del cuerpo
+        offset_x = int(w * 0.3)  # cuanto más grande, más se separa del cuerpo
 
         if mirando == "left":
             racket.centerx = self.rect.centerx - offset_x
@@ -582,6 +580,5 @@ class Player(GameObject):
         dx = (self.racket_rect.centerx - bx)
         dy = (self.racket_rect.centery - by)
         dist = (dx*dx + dy*dy) ** 0.5
-        # ajustá tolerancia si querés
         # print(f"💨 Sin colisión con pelota. Distancia pantalla={dist:.1f}, tolerancia=25")
         return False

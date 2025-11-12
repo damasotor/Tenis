@@ -1,13 +1,10 @@
-import os
-import json
 import math
 import random
-import collections
-from typing import Optional, List, Tuple
+from typing import Tuple
 
 import pygame
 
-# Asumimos que estas están definidas en otro lado
+
 try:
     from engine.utils.screen import ALTO, ANCHO, screen_to_world
 except ImportError:
@@ -49,7 +46,6 @@ class Ball(pygame.sprite.Sprite):
         # Altura en el eje vertical (z)
         self.z = 80
         
-        # 🔑 CORRECCIÓN: Usar las velocidades iniciales pasadas
         self.vx = vx
         self.vy = vy
         self.vz = 0.0 # Impulso vertical inicial
@@ -117,7 +113,6 @@ class Ball(pygame.sprite.Sprite):
 
 
     def launch_toward_zone(self, zone: str = None, speed: float = 5.0):
-        # ... (Lógica de lanzamiento, se mantiene igual) ...
         if zone is None:
             zone = random.choice(["izquierda", "centro", "derecha"])
 
@@ -136,7 +131,6 @@ class Ball(pygame.sprite.Sprite):
         print(f"[DEBUG] Lanzamiento hacia {zone}: vx={self.vx:.2f}, vy={self.vy:.2f}, vz={self.vz:.2f}")
     
     def launch_toward_random_zone(self):
-        # ... (Lógica de lanzamiento, se mantiene igual) ...
         zones = [
             (random.uniform(100, 400), random.uniform(100, 200)),
             (random.uniform(400, 700), random.uniform(100, 200)),
@@ -158,8 +152,6 @@ class Ball(pygame.sprite.Sprite):
     # ----------------- Eventos -----------------
     def _trigger_squash(self):
         self._squash_timer = self._squash_duration
-
-    # ... (Métodos on_racket_hit, on_body_hit, on_out, on_point_scored se mantienen igual) ...
 
     def _on_bounce_court(self):
         if hasattr(self.game, "audio"):
@@ -208,7 +200,7 @@ class Ball(pygame.sprite.Sprite):
 
     def on_out(self):
         if hasattr(self.game, "audio"):
-            # Lógica de audio si queres
+            # Lógica de audio
             pass
         
         last = getattr(self.game, "last_hitter", None)
@@ -222,7 +214,7 @@ class Ball(pygame.sprite.Sprite):
 
     def on_point_scored(self):
         if hasattr(self.game, "audio"):
-            # Lógica de audio si queres y sino bueno
+            # Lógica de audio
             pass
 
     def prepare_for_serve(self, server, x, y):
@@ -271,7 +263,7 @@ class Ball(pygame.sprite.Sprite):
             self.waiting_hit = False
             self.serve_stage = "fault"
             print("❌ Saque fallido (la pelota cayó sin ser golpeada)")
-            self.on_out()  # o algún método de reinicio
+            self.on_out()
 
     def update(self):
         # --------------------------
@@ -374,7 +366,6 @@ class Ball(pygame.sprite.Sprite):
                 self.out_of_bounds = True
                 self.on_out() # Llama a la lógica de punto
 
-        # 🔑 CORRECCIÓN CRÍTICA: Lógica de colisión de red movida de draw() a update()
         if hasattr(self.game, "field") and self.z > 0: # Solo chequear si está en el aire
             net = self.game.field.net
             now = pygame.time.get_ticks()
@@ -446,7 +437,6 @@ class Ball(pygame.sprite.Sprite):
         # --- Calcular dirección del golpe ---
         dx = target_x - self.x
         dy = target_y - self.y
-        # dz = 0 - self.z # Eliminamos esto, el golpe ya se encarga de la altura
 
         dist = math.sqrt(dx**2 + dy**2)
         if dist == 0:

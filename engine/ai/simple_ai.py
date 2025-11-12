@@ -1,4 +1,3 @@
-import random
 import time
 from math import hypot
 import pygame
@@ -64,7 +63,7 @@ class SimpleTennisAI:
         bx, by = self._read_ball_world()
         px, py = self._read_player_world()
 
-        # ⚙️ Ajustá esto según la mitad de tu cancha
+        # Mitad de la cancha
         net_y = 100
 
         # Detectar de qué lado está la pelota
@@ -117,7 +116,7 @@ class SimpleTennisAI:
                 else:
                     keys[pygame.K_s] = True
 
-        # (Opcional) animaciones básicas
+        # animaciones básicas
         moving = any([keys[pygame.K_w], keys[pygame.K_s], keys[pygame.K_a], keys[pygame.K_d]])
         if hasattr(self.player, "current_animation"):
             if moving:

@@ -93,12 +93,7 @@ class Field:
         self.debug = False
 
         # -------- Textura de fondo de la cancha --------
-        # Soportamos ruta custom (texture_path) o tu ruta por defecto en español.
-        if texture_path:
-            base = os.path.join("assets", "textures")
-            cand = os.path.join(base, os.path.basename(texture_path))
-        else:
-            cand = os.path.join("assets", "texturas", "Cancha.png")
+        cand = os.path.join("assets", "texturas", "Cancha.png")
 
         self.texture: Optional[pygame.Surface] = None
         self._scaled_texture: Optional[pygame.Surface] = None
