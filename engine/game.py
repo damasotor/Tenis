@@ -573,12 +573,19 @@ class Game:
                                 self._start_debug_restart_countdown()
 
                 elif self.estado_juego == 'pausa':
-                    if evento.type == pygame.KEYDOWN and evento.key in (pygame.K_ESCAPE, pygame.K_p):
-                        if "ui_whoosh" in self.audio.sounds:
-                            self.audio.play_sound("ui_whoosh")
-                        self.audio.play_sound("ui_back")
-                        self.estado_juego = 'jugando'
-                        self.audio.unduck_music()
+                    if evento.type == pygame.KEYDOWN:
+                        if evento.key in (pygame.K_ESCAPE, pygame.K_p):
+                            if "ui_whoosh" in self.audio.sounds: self.audio.play_sound("ui_whoosh")
+                            self.audio.play_sound("ui_back")
+                            self.estado_juego = 'jugando'
+                            self.audio.unduck_music()
+                        elif evento.key in (pygame.K_RETURN, pygame.K_BACKSPACE):
+                            # Volver al menú desde PAUSA
+                            if "ui_whoosh" in self.audio.sounds: self.audio.play_sound("ui_whoosh")
+                            self.audio.play_sound("ui_back")
+                            self._set_music_state("menu")
+                            self.estado_juego = 'menu'
+
 
                 elif self.estado_juego in ('victoria', 'gameover'):
                     if evento.type == pygame.KEYDOWN:
@@ -635,7 +642,7 @@ class Game:
                 self._render_ingame()
             elif self.estado_juego == 'pausa':
                 self._render_ingame()
-                self._draw_center_text("PAUSA (Esc/P para volver)")
+                self._draw_center_text("PAUSA (Esc/P: continuar, Enter: menú)")
             elif self.estado_juego == 'victoria':
                 self._render_victoria()
             elif self.estado_juego == 'gameover':
