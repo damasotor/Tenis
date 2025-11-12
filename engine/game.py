@@ -42,7 +42,7 @@ class Game:
 
         # Mundo
         self.field = Field(6, 10)
-        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False, game=self)# >x = Más a la derecha, >y = Más atrás
+        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False, game=self)  # >x = Más a la derecha, >y = Más atrás
         self.jugador2 = Player(385, ALTO / 2 - 450, field=self.field, jugador2=True, game=self)
 
         # Reloj
@@ -56,6 +56,10 @@ class Game:
         self.config_path = os.path.join("assets", "audio_config.json")
         self._load_audio_config()
 
+        # Config persistente de juego (modo)
+        self.game_config_path = os.path.join("assets", "game_config.json")
+        self._load_game_config()
+
         # Flags de desarrollo
         self.debug_audio = os.getenv("VJ2D_DEBUG_AUDIO", "1") == "1"
         self.use_crowd_ambience = False
@@ -64,7 +68,7 @@ class Game:
         self._set_music_state("menu")
 
         # ---- MODO / ESTADOS ----
-        self.modo = os.getenv("VJ2D_MODO", "1P")
+        self.modo = os.getenv("VJ2D_MODO", self.modo if hasattr(self, "modo") else "1P")
         self.estado_juego = 'menu'  # 'menu'|'opciones'|'jugando'|'pausa'|'victoria'|'gameover'
 
         # Menú simple
@@ -84,6 +88,7 @@ class Game:
         self.balls = pygame.sprite.Group()
         self._ball_main = None  # referencia a la pelota "principal"
         self.current_server = "P1"
+
         # IA / control según modo
         self.ai_p2 = None
         if self.modo == "1P" and SimpleTennisAI is not None:
@@ -115,7 +120,7 @@ class Game:
         ]
 
         # Último que pegó
-        self.last_hitter = None  # "P1"/"P2"/None
+        self.last_hitter = None  # "P1"/"P2"/None"
 
         # --- Cuenta regresiva de reinicio (punto 4) ---
         self._restart_cd = RestartCountdown(self._reiniciar_partida) if RestartCountdown else None
@@ -132,8 +137,11 @@ class Game:
                 m = str(cfg.get("modo", "1P")).upper()
                 if m in ("1P", "2P"):
                     self.modo = m
+            else:
+                self.modo = "1P"
         except Exception as e:
             print(f"[GameCfg] No se pudo leer game_config.json: {e}")
+            self.modo = "1P"
 
     def _save_game_config(self):
         try:
@@ -273,6 +281,7 @@ class Game:
             if self.use_crowd_ambience and os.path.exists(ap("crowd_loop.wav")):
                 music_path = ap("crowd_loop.wav")
             elif os.path.exists(ap("ingame_music.wav")):
+                # >>> Aquí se usa tu pista convertida <<<
                 music_path = ap("ingame_music.wav")
             if music_path:
                 self.audio.load_music(music_path)
@@ -305,6 +314,7 @@ class Game:
 
                     if evento.key == pygame.K_F3 and self.debug_overlays:
                         self.show_bounce_debug = not self.show_bounce_debug
+
                     # 🎾 Saque jugador 1 y jugador 2
                     # --- Jugador 1 ---
                     if evento.key == pygame.K_SPACE:
@@ -480,7 +490,6 @@ class Game:
                             self.ai_p2.ball = self._ball_main  # type: ignore
                         # obtener las teclas simuladas desde la IA
                         simulated_keys = self.ai_p2.get_simulated_keys()
-
                         # mover jugador 2 usando las teclas simuladas
                         self.jugador2.mover(simulated_keys)
                     else:
@@ -501,7 +510,6 @@ class Game:
                             self.last_hitter = "P1"
                         if self.jugador2.check_ball_collision(ball):
                             self.last_hitter = "P2"
-
 
             # RENDER
             self.PANTALLA.fill(AZUL_OSCURO)
