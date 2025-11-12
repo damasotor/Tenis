@@ -245,8 +245,8 @@ class Player(GameObject):
 
         # --- BLOQUEAR movimiento y animaciones si está en modo saque ---
         if getattr(self, "is_serving", False):
-            # No mover ni sobreescribir animaciones durante el saque
-            return
+            if self.serve_stage in ("toss", "hit"):
+                return  # bloquear movimiento solo durante esas fases
         # =========================
         # CONTROL DE SWING / GOLPE
         # =========================
