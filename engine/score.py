@@ -107,13 +107,24 @@ class ScoreManager:
 
         
     def draw_hud(self, screen, font):
-        """Dibuja la puntuación actual en pantalla."""
-        import pygame
+        """Dibuja la puntuación actual en pantalla con borde negro."""
         score_text = self.get_score_str()
 
-        color = (255, 255, 255)
-        surf = font.render(score_text, True, color)
+        # --- Colores ---
+        text_color = (255, 255, 255)  # Blanco
+        outline_color = (0, 0, 0)     # Negro
+
+        # --- Render principal ---
+        surf = font.render(score_text, True, text_color)
+        outline_surf = font.render(score_text, True, outline_color)
+
         rect = surf.get_rect(center=(screen.get_width() // 2, 40))
+
+        # --- Dibujar borde (8 direcciones alrededor del texto) ---
+        for dx, dy in [(-2, 0), (2, 0), (0, -2), (0, 2), (-2, -2), (-2, 2), (2, -2), (2, 2)]:
+            screen.blit(outline_surf, rect.move(dx, dy))
+
+        # --- Dibujar texto principal ---
         screen.blit(surf, rect)
 
 
