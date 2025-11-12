@@ -17,7 +17,8 @@ from engine.field import Field
 from engine.utils.colors import AZUL_OSCURO, BLANCO
 from engine.utils.screen import ANCHO, ALTO, world_to_screen
 from engine.audio import AudioManager
-from engine.ball import Ball, screen_to_world
+from engine.ball import Ball
+from engine.background import Background
 
 # Debug overlays (pique IN/OUT)
 try:
@@ -54,6 +55,7 @@ class Game:
         self.field = Field(6, 10)
         self.jugador1 = Player(520, 350,  field=self.field, jugador2=False, game=self)  # >x = Más a la derecha, >y = Más atrás
         self.jugador2 = Player(385, ALTO / 2 - 450, field=self.field, jugador2=True, game=self)
+        self.background = Background(self)
 
         # Reloj
         self.reloj = pygame.time.Clock()
@@ -736,6 +738,9 @@ class Game:
     # ---------------------------
     def _render_ingame(self):
         self.field.draw(self.PANTALLA)
+        dt = self.reloj.get_time()
+        self.background.update(dt)
+        self.background.draw(self.PANTALLA)
 
         if self._debug_bounds:
             self.field.draw_debug_bounds(self.PANTALLA)
@@ -810,7 +815,7 @@ class Game:
         if not self.score:
             self._start_new_rally()
             return
-
+        self.background.aplaudir()
         self.score.point_for(who)
 
         

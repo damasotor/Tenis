@@ -1,0 +1,74 @@
+{
+    "project_name": "background",
+    "spritesheet_path": "fondo-completo.png",
+    "character_name": "you",
+    "animations": {
+        "idle":[
+            {
+                "x": 0,
+                "y": 0,
+                "width": 800,
+                "height": 600,
+                "name": "sprite_0",
+                "description": "Sugerido",
+                "animation": "quieto"
+            }
+        ],
+        "clap": [
+            {
+                "x": 800,
+                "y": 0,
+                "width": 800,
+                "height": 600,
+                "name": "aplauso1",
+                "description": "Sugerido",
+                "animation": "aplauso"
+            },
+            {
+                "x": 1600,
+                "y": 0,
+                "width": 800,
+                "height": 600,
+                "name": "aplauso2",
+                "description": "Sugerido",
+                "animation": "aplauso"
+            },
+            {
+                "x": 800,
+                "y": 0,
+                "width": 800,
+                "height": 600,
+                "name": "aplauso1",
+                "description": "Sugerido",
+                "animation": "aplauso"
+            },
+            {
+                "x": 1600,
+                "y": 0,
+                "width": 800,
+                "height": 600,
+                "name": "aplauso2",
+                "description": "Sugerido",
+                "animation": "aplauso"
+            },
+            {
+                "x": 800,
+                "y": 0,
+                "width": 800,
+                "height": 600,
+                "name": "aplauso1",
+                "description": "Sugerido",
+                "animation": "aplauso"
+            },
+            {
+                "x": 1600,
+                "y": 0,
+                "width": 800,
+                "height": 600,
+                "name": "aplauso2",
+                "description": "Sugerido",
+                "animation": "aplauso"
+            }
+        ]
+    }
+}
