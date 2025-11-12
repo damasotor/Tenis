@@ -1,16 +1,15 @@
 import os
 import json
 import pygame
-
+from pathlib import Path
 from dataclasses import dataclass
 
 @dataclass
 class UIButton:
     rect: pygame.Rect
     label: str
-    action: str  # "start"|"options"|"quit"
+    action: str  # "start"|"options"|"quit"|"opts_apply"|"opts_back"
     hovered: bool = False
-
 
 from engine.player import Player
 from engine.field import Field
@@ -52,7 +51,7 @@ class Game:
 
         # Mundo
         self.field = Field(6, 10)
-        self.jugador1 = Player(520, 350,  field=self.field, jugador2=False, game=self)  # >x = Más a la derecha, >y = Más atrás
+        self.jugador1 = Player(520, 350, field=self.field, jugador2=False, game=self)  # >x = derecha, >y = atrás
         self.jugador2 = Player(385, ALTO / 2 - 450, field=self.field, jugador2=True, game=self)
 
         # Reloj
@@ -74,7 +73,7 @@ class Game:
         self.debug_audio = os.getenv("VJ2D_DEBUG_AUDIO", "1") == "1"
         self.use_crowd_ambience = False
 
-        # Música por estado → MENÚ (respetando mute de grupo)
+        # Música por estado → MENÚ (respeta mute de grupo)
         self._set_music_state("menu")
 
         # ---- MODO / ESTADOS ----
@@ -85,16 +84,57 @@ class Game:
         self.menu_items = ["Comenzar", "Opciones", "Salir"]
         self.menu_index = 0
 
-        # Fuentes
-        self.font_title = pygame.font.Font(None, 64)
-        self.font_item  = pygame.font.Font(None, 44)
-        self.font_small = pygame.font.Font(None, 32)
-        self.font_hud   = pygame.font.Font(None, 38)
+        # --- Fuentes ---
+        def asset_path(*parts) -> str:
+            """Resuelve rutas relativas al archivo actual."""
+            here = Path(__file__).resolve().parent
+            candidates = [
+                Path.cwd() / Path(*parts),
+                here / Path(*parts),
+                here.parent / Path(*parts),
+            ]
+            for c in candidates:
+                if c.exists():
+                    return str(c)
+            return str(Path(*parts))
+
+        font_dir = asset_path("assets", "fonts")
+        FONT_REG = Path(font_dir) / "DejaVuSans.ttf"
+        FONT_BLD = Path(font_dir) / "DejaVuSans-Bold.ttf"
+
+        def _font_try(paths, size):
+            for p in paths:
+                p = str(p)
+                if Path(p).exists():
+                    print(f"[Font] usando {p}")
+                    return pygame.font.Font(p, size)
+            # fallback a una fuente del sistema con símbolos Unicode
+            try:
+                match = pygame.font.match_font([
+                    "DejaVu Sans", "Noto Sans", "Arial Unicode MS", "Liberation Sans"
+                ])
+                if match:
+                    print(f"[Font] fallback sysfont -> {match}")
+                    return pygame.font.Font(match, size)
+            except Exception:
+                pass
+            print("[Font] fallback -> default")
+            return pygame.font.Font(None, size)
+
+        self.font_title = _font_try([FONT_BLD, FONT_REG], 60)  # título
+        self.font_item  = _font_try([FONT_REG], 40)            # botones
+        self.font_small = _font_try([FONT_REG], 24)            # hints
+        self.font_hud   = _font_try([FONT_REG], 34)            # HUD marcador
+
+        # Botones y sliders (Opciones)
+        self._opt_buttons: list[UIButton] = []   # APLICAR / VOLVER
+        self._opt_bars: dict[str, pygame.Rect] = {}  # "music"|"sfx"|"ui" -> rect barra
+        self._dragging_bar: str | None = None    # grupo que se arrastra con el mouse
+        self._build_options_ui()                 # inicializa botones/barras
 
         # Botones del menú
         self._menu_buttons: list[UIButton] = []
         self._build_menu_buttons()
-
 
         # Fondo del menú principal
         bg_path = os.path.join("assets", "backgrounds", "menu_bg.jpg")
@@ -103,13 +143,12 @@ class Game:
             self.menu_bg = pygame.image.load(bg_path).convert()
             self.menu_bg = pygame.transform.scale(self.menu_bg, (ANCHO, ALTO))
 
-
         # Score
         self.score = ScoreManager() if ScoreManager else None
 
         # Pelotas
         self.balls = pygame.sprite.Group()
-        self._ball_main = None  # referencia a la pelota "principal"
+        self._ball_main = None  # referencia a la pelota principal
         self.current_server = "P1"
 
         # IA / control según modo
@@ -133,22 +172,21 @@ class Game:
 
         # Opciones (menú de opciones de audio y modo)
         self._opts_names  = ["Modo", "Música", "SFX", "UI"]
-        self._opts_groups = [None,   "music",  "sfx", "ui"]
+        self._opts_groups = [None, "music", "sfx", "ui"]
         self._opts_index  = 0
         self._opts_values = [
             self.modo,                         # idx 0 → Modo (no es grupo)
             self.audio.group_vol["music"],     # idx 1
             self.audio.group_vol["sfx"],       # idx 2
             self.audio.group_vol["ui"],        # idx 3
-]
-
+        ]
 
         # Último que pegó
         self.last_hitter = None  # "P1"/"P2"/None"
 
-        # --- Cuenta regresiva de reinicio (punto 4) ---
+        # Cuenta regresiva de reinicio
         self._restart_cd = RestartCountdown(self._reiniciar_partida) if RestartCountdown else None
-        self._restart_block_input = False  # si True, no procesamos entradas de juego durante el 3-2-1
+        self._restart_block_input = False  # si True, no procesamos entradas durante 3-2-1
 
     # ---------------------------
     # Config de juego (modo 1P/2P)
@@ -206,27 +244,27 @@ class Game:
         def p(n): return os.path.join(ap, n)
 
         # UI
-        self.audio.load_sound("ui_move",    p("ui_move.wav"),    0.6, group="ui",  cooldown_ms=90)
-        self.audio.load_sound("ui_select",  p("ui_select.wav"),  0.8, group="ui",  cooldown_ms=120)
-        self.audio.load_sound("ui_back",    p("ui_back.wav"),    0.6, group="ui",  cooldown_ms=120)
+        self.audio.load_sound("ui_move",   p("ui_move.wav"),   0.6, group="ui", cooldown_ms=90)
+        self.audio.load_sound("ui_select", p("ui_select.wav"), 0.8, group="ui", cooldown_ms=120)
+        self.audio.load_sound("ui_back",   p("ui_back.wav"),   0.6, group="ui", cooldown_ms=120)
         if os.path.exists(p("ui_whoosh.wav")):
             self.audio.load_sound("ui_whoosh", p("ui_whoosh.wav"), 0.7, group="ui", cooldown_ms=300)
 
         # Tenis base
-        self.audio.load_sound("serve",         p("serve.wav"),        0.9, group="sfx", cooldown_ms=150)
+        self.audio.load_sound("serve",        p("serve.wav"),        0.9, group="sfx", cooldown_ms=150)
         if os.path.exists(p("serve2.wav")):
-            self.audio.load_sound("serve2",    p("serve2.wav"),       0.9, group="sfx", cooldown_ms=150)
+            self.audio.load_sound("serve2",   p("serve2.wav"),       0.9, group="sfx", cooldown_ms=150)
             self.audio.register_variants("serve", "serve2")
 
-        self.audio.load_sound("hit_racket",    p("hit_racket.wav"),   0.8, group="sfx", cooldown_ms=40)
-        self.audio.load_sound("bounce_court",  p("bounce_court.wav"), 0.7, group="sfx", cooldown_ms=60)
+        self.audio.load_sound("hit_racket",   p("hit_racket.wav"),   0.8, group="sfx", cooldown_ms=40)
+        self.audio.load_sound("bounce_court", p("bounce_court.wav"), 0.7, group="sfx", cooldown_ms=60)
 
         # Compat viejo
         if os.path.exists(p("net_touch.wav")):
             self.audio.load_sound("net_touch", p("net_touch.wav"), 0.7, group="sfx", cooldown_ms=120)
 
-        self.audio.load_sound("out_whistle",   p("out_whistle.wav"),  0.7, group="sfx", cooldown_ms=300)
-        self.audio.load_sound("score_jingle",  p("score_jingle.wav"), 0.8, group="sfx", cooldown_ms=400)
+        self.audio.load_sound("out_whistle",  p("out_whistle.wav"),  0.7, group="sfx", cooldown_ms=300)
+        self.audio.load_sound("score_jingle", p("score_jingle.wav"), 0.8, group="sfx", cooldown_ms=400)
 
         # Variantes opcionales
         variants = []
@@ -252,7 +290,7 @@ class Game:
         if os.path.exists(p("sting_match.wav")):
             self.audio.load_sound("sting_match", p("sting_match.wav"), 0.85, group="sfx", cooldown_ms=800)
 
-        # NUEVO: sonidos de red (cinta/cuerpo)
+        # Sonidos de red (cinta/cuerpo) si existen en AudioManager
         if hasattr(self.audio, "load_net_sfx"):
             self.audio.load_net_sfx()
 
@@ -289,8 +327,7 @@ class Game:
         def ap(*parts):
             return os.path.join("assets", "audio", *parts)
 
-        # Importante: NO forzar volume en play_music; dejar que use el del grupo
-        # así si el usuario muteó música, se respeta.
+        # No forzar volume en play_music; usar el del grupo
         if state == "menu":
             self.audio.fadeout_music(200)
             path = ap("menu_music.wav")
@@ -305,7 +342,6 @@ class Game:
             if self.use_crowd_ambience and os.path.exists(ap("crowd_loop.wav")):
                 music_path = ap("crowd_loop.wav")
             elif os.path.exists(ap("ingame_music.wav")):
-                # >>> Aquí se usa tu pista convertida <<<
                 music_path = ap("ingame_music.wav")
             if music_path:
                 self.audio.load_music(music_path)
@@ -339,41 +375,40 @@ class Game:
                     if evento.key == pygame.K_F3 and self.debug_overlays:
                         self.show_bounce_debug = not self.show_bounce_debug
 
-                    # 🎾 Saque jugador 1 y jugador 2
-                    # --- Jugador 1 ---
+                    # Saques
                     if evento.key == pygame.K_SPACE:
-                        # Asegurarse de que haya una pelota principal
                         ball = self._ball_main
                         if ball is not None:
-                            # Si la pelota está lista para sacar → lanzar hacia arriba
                             if getattr(ball, "serve_stage", "ready") == "ready":
-                                # Posición inicial del jugador 1 (desde world_x, world_y)
                                 start_x, start_y = world_to_screen(self.jugador1.world_x, self.jugador1.world_y)
                                 ball.start_toss("P1", start_x - 20, start_y - 60)
-                                self.jugador1.iniciar_saque()  # animación del lanzamiento
-                            # Si la pelota ya fue lanzada → intentar golpear
+                                self.jugador1.iniciar_saque()
                             elif getattr(ball, "serve_stage", None) in ("toss", "falling"):
                                 if self.jugador1:
                                     self.jugador1.realizar_saque()
-                                    ball.hit_by_player((self.jugador1.world_x, self.jugador1.world_y), zone=self.jugador1.pending_direction, is_player2=self.jugador1.is_player2)
+                                    ball.hit_by_player(
+                                        (self.jugador1.world_x, self.jugador1.world_y),
+                                        zone=self.jugador1.pending_direction,
+                                        is_player2=self.jugador1.is_player2
+                                    )
                                 else:
                                     self.jugador2.realizar_saque()
-                                    ball.hit_by_player((self.jugador2.world_x, self.jugador2.world_y), zone=self.jugador2.pending_direction, is_player2=self.jugador2.is_player2)
+                                    ball.hit_by_player(
+                                        (self.jugador2.world_x, self.jugador2.world_y),
+                                        zone=self.jugador2.pending_direction,
+                                        is_player2=self.jugador2.is_player2
+                                    )
                         else:
                             print("[WARN] No hay pelota principal activa para el saque.")
 
-                    # --- Jugador 2 ---
                     if evento.key == pygame.K_f:
-                        # Asegurarse de que haya una pelota principal
                         ball = self._ball_main
                         if ball is not None:
-                            # Si la pelota está lista para sacar → lanzar hacia arriba
                             if getattr(ball, "serve_stage", "ready") == "ready":
                                 start_x = self.jugador2.world_x
                                 start_y = self.jugador2.world_y
                                 ball.start_toss("P2", start_x, start_y)
-                                self.jugador2.iniciar_saque()  # animación del lanzamiento
-                            # Si la pelota ya fue lanzada → intentar golpear
+                                self.jugador2.iniciar_saque()
                             elif getattr(ball, "serve_stage", None) in ("toss", "falling"):
                                 self.jugador2.golpear_saque()
                                 ball.hit_by_player()
@@ -396,126 +431,158 @@ class Game:
                         v = min(1.0, self.audio.group_vol["sfx"] + 0.05)
                         self.audio.set_group_volume("sfx", v)
 
-                    # Mute global (respeta al reiniciar)
+                    # Mute global
                     if evento.key == pygame.K_m:
                         self.audio.toggle_mute_all()
 
-                    # ---- ESTADOS ----
-            if self.estado_juego == 'menu':
-                # Click de mouse en botones del menú
-                if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
-                    for btn in self._menu_buttons:
-                        if btn.rect.collidepoint(evento.pos):
+                # ---- ESTADOS ----
+                if self.estado_juego == 'menu':
+                    # Click de mouse en botones del menú
+                    if evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                        for btn in self._menu_buttons:
+                            if btn.rect.collidepoint(evento.pos):
+                                self.audio.play_sound("ui_select")
+                                if btn.action == "start":
+                                    self._set_music_state("ingame")
+                                    self.estado_juego = 'jugando'
+                                    self._start_new_rally()
+                                elif btn.action == "options":
+                                    self._enter_options()
+                                elif btn.action == "quit":
+                                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                                break
+
+                    # Navegación con teclado
+                    elif evento.type == pygame.KEYDOWN:
+                        # Atajos de modo 1P/2P
+                        if evento.key == pygame.K_1:
+                            self._set_mode("1P")
+                        elif evento.key == pygame.K_2:
+                            self._set_mode("2P")
+
+                        elif evento.key in (pygame.K_UP, pygame.K_w):
+                            self.menu_index = (self.menu_index - 1) % len(self.menu_items)
+                            self.audio.play_sound("ui_move")
+                        elif evento.key in (pygame.K_DOWN, pygame.K_s):
+                            self.menu_index = (self.menu_index + 1) % len(self.menu_items)
+                            self.audio.play_sound("ui_move")
+                        elif evento.key in (pygame.K_RETURN, pygame.K_SPACE):
                             self.audio.play_sound("ui_select")
-                            if btn.action == "start":
-                                self._set_music_state("ingame")
-                                self.estado_juego = 'jugando'
-                                self._start_new_rally()
-                            elif btn.action == "options":
-                                self._enter_options()
-                            elif btn.action == "quit":
-                                pygame.event.post(pygame.event.Event(pygame.QUIT))
-                            break
+                            self._menu_select()
+                        elif evento.key == pygame.K_ESCAPE:
+                            self.audio.play_sound("ui_back")
+                            ejecutando = False
 
-                # Navegación con teclado
-                elif evento.type == pygame.KEYDOWN:
-                    # Atajos de modo 1P/2P
-                    if evento.key == pygame.K_1:
-                        self._set_mode("1P")
-                    elif evento.key == pygame.K_2:
-                        self._set_mode("2P")
+                elif self.estado_juego == 'opciones':
+                    if evento.type == pygame.KEYDOWN:
+                        handled = self._handle_options_input(evento.key)
+                        if not handled and evento.key == pygame.K_ESCAPE:
+                            self._cancel_options()
 
-                    elif evento.key in (pygame.K_UP, pygame.K_w):
-                        self.menu_index = (self.menu_index - 1) % len(self.menu_items)
-                        self.audio.play_sound("ui_move")
-                    elif evento.key in (pygame.K_DOWN, pygame.K_s):
-                        self.menu_index = (self.menu_index + 1) % len(self.menu_items)
-                        self.audio.play_sound("ui_move")
-                    elif evento.key in (pygame.K_RETURN, pygame.K_SPACE):
-                        self.audio.play_sound("ui_select")
-                        self._menu_select()
-                    elif evento.key == pygame.K_ESCAPE:
-                        self.audio.play_sound("ui_back")
-                        ejecutando = False
+                    # --- Mouse: click en botones / sliders ---
+                    elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
+                        # Botones
+                        for btn in self._opt_buttons:
+                            if btn.rect.collidepoint(evento.pos):
+                                self.audio.play_sound("ui_select")
+                                if btn.action == "opts_apply":
+                                    self._apply_options()
+                                    self._back_to_menu()
+                                elif btn.action == "opts_back":
+                                    self._cancel_options()  # descarta cambios
+                                break
 
-            elif self.estado_juego == 'opciones':
-                if evento.type == pygame.KEYDOWN:
-                    handled = self._handle_options_input(evento.key)
-                    if not handled and evento.key == pygame.K_ESCAPE:
-                        self.estado_juego = 'menu'
+                        # Sliders: seleccionar fila y modificar SOLO valores locales
+                        for name, rect in self._opt_bars.items():
+                            if rect.collidepoint(evento.pos):
+                                self._opts_index = {"music": 1, "sfx": 2, "ui": 3}[name]
+                                rel = max(0.0, min(1.0, (evento.pos[0] - rect.left) / rect.width))
+                                self._opts_values[self._opts_index] = round(rel, 2)
+                                self._dragging_bar = name
+                                break
 
-            elif self.estado_juego == 'jugando':
-                if evento.type == pygame.KEYDOWN:
-                    # No aceptar entradas de gameplay durante el 3-2-1
-                    if self._restart_block_input:
+                    elif evento.type == pygame.MOUSEMOTION and self._dragging_bar:
+                        rect = self._opt_bars[self._dragging_bar]
+                        rel = max(0.0, min(1.0, (evento.pos[0] - rect.left) / rect.width))
+                        idx = {"music": 1, "sfx": 2, "ui": 3}[self._dragging_bar]
+                        self._opts_values[idx] = round(rel, 2)
+
+                    elif evento.type == pygame.MOUSEBUTTONUP and evento.button == 1:
+                        self._dragging_bar = None
+
+
+
+                elif self.estado_juego == 'jugando':
+                    if evento.type == pygame.KEYDOWN:
+                        # No aceptar entradas de gameplay durante el 3-2-1
+                        if self._restart_block_input:
+                            if evento.key == pygame.K_ESCAPE:
+                                if "ui_whoosh" in self.audio.sounds:
+                                    self.audio.play_sound("ui_whoosh")
+                                self.audio.play_sound("ui_back")
+                                self.estado_juego = 'pausa'
+                                self.audio.duck_music(0.08)
+                            continue
+
                         if evento.key == pygame.K_ESCAPE:
                             if "ui_whoosh" in self.audio.sounds:
                                 self.audio.play_sound("ui_whoosh")
                             self.audio.play_sound("ui_back")
                             self.estado_juego = 'pausa'
                             self.audio.duck_music(0.08)
-                        continue
 
-                    if evento.key == pygame.K_ESCAPE:
+                        # DEBUG SFX (opcional)
+                        if self.debug_audio:
+                            if evento.key == pygame.K_v:
+                                self.audio.play_sound("serve")
+                            if evento.key == pygame.K_h:
+                                for b in self.balls:
+                                    b.on_racket_hit()
+                                    break
+                            if evento.key == pygame.K_b:
+                                self.audio.play_sound("bounce_court")
+                            if evento.key == pygame.K_n:
+                                if "net_tape" in self.audio.sounds:
+                                    self.audio.play_sound("net_tape")
+                                if "net_body" in self.audio.sounds:
+                                    self.audio.play_sound("net_body")
+                                elif "net_touch" in self.audio.sounds:
+                                    self.audio.play_sound("net_touch")
+                                if "crowd_ooh" in self.audio.sounds:
+                                    self.audio.play_sound("crowd_ooh")
+                            if evento.key == pygame.K_o:
+                                for b in self.balls:
+                                    b.on_out()
+                                    break
+                            if evento.key == pygame.K_p:
+                                for b in self.balls:
+                                    b.on_point_scored()
+                                    break
+                            if evento.key == pygame.K_c and "crowd_ooh" in self.audio.sounds:
+                                self.audio.play_sound("crowd_ooh")
+                            if evento.key == pygame.K_f and "crowd_ahh" in self.audio.sounds:
+                                self.audio.play_sound("crowd_ahh")
+                            if evento.key == pygame.K_k and "sting_match" in self.audio.sounds:
+                                self.audio.duck_music(0.10)
+                                self.audio.play_sound("sting_match")
+                                self.audio.unduck_music()
+                            if evento.key == pygame.K_g:
+                                self._start_debug_restart_countdown()
+
+                elif self.estado_juego == 'pausa':
+                    if evento.type == pygame.KEYDOWN and evento.key in (pygame.K_ESCAPE, pygame.K_p):
                         if "ui_whoosh" in self.audio.sounds:
                             self.audio.play_sound("ui_whoosh")
                         self.audio.play_sound("ui_back")
-                        self.estado_juego = 'pausa'
-                        self.audio.duck_music(0.08)
+                        self.estado_juego = 'jugando'
+                        self.audio.unduck_music()
 
-                    # DEBUG SFX (opcional)
-                    if self.debug_audio:
-                        if evento.key == pygame.K_v:
-                            self.audio.play_sound("serve")
-                        if evento.key == pygame.K_h:
-                            for b in self.balls:
-                                b.on_racket_hit()
-                                break
-                        if evento.key == pygame.K_b:
-                            self.audio.play_sound("bounce_court")
-                        if evento.key == pygame.K_n:
-                            if "net_tape" in self.audio.sounds:
-                                self.audio.play_sound("net_tape")
-                            if "net_body" in self.audio.sounds:
-                                self.audio.play_sound("net_body")
-                            elif "net_touch" in self.audio.sounds:
-                                self.audio.play_sound("net_touch")
-                            if "crowd_ooh" in self.audio.sounds:
-                                self.audio.play_sound("crowd_ooh")
-                        if evento.key == pygame.K_o:
-                            for b in self.balls:
-                                b.on_out()
-                                break
-                        if evento.key == pygame.K_p:
-                            for b in self.balls:
-                                b.on_point_scored()
-                                break
-                        if evento.key == pygame.K_c and "crowd_ooh" in self.audio.sounds:
-                            self.audio.play_sound("crowd_ooh")
-                        if evento.key == pygame.K_f and "crowd_ahh" in self.audio.sounds:
-                            self.audio.play_sound("crowd_ahh")
-                        if evento.key == pygame.K_k and "sting_match" in self.audio.sounds:
-                            self.audio.duck_music(0.10)
-                            self.audio.play_sound("sting_match")
-                            self.audio.unduck_music()
-                        if evento.key == pygame.K_g:
-                            self._start_debug_restart_countdown()
-
-            elif self.estado_juego == 'pausa':
-                if evento.type == pygame.KEYDOWN and evento.key in (pygame.K_ESCAPE, pygame.K_p):
-                    if "ui_whoosh" in self.audio.sounds:
-                        self.audio.play_sound("ui_whoosh")
-                    self.audio.play_sound("ui_back")
-                    self.estado_juego = 'jugando'
-                    self.audio.unduck_music()
-
-            elif self.estado_juego in ('victoria', 'gameover'):
-                if evento.type == pygame.KEYDOWN:
-                    if evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        self._reiniciar_partida()
-                    elif evento.key == pygame.K_ESCAPE:
-                        self._volver_al_menu()
-
+                elif self.estado_juego in ('victoria', 'gameover'):
+                    if evento.type == pygame.KEYDOWN:
+                        if evento.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                            self._reiniciar_partida()
+                        elif evento.key == pygame.K_ESCAPE:
+                            self._volver_al_menu()
 
             # LÓGICA
             if self.estado_juego == 'jugando':
@@ -531,7 +598,7 @@ class Game:
                         # asegurar referencia a la pelota por si cambió en el rally
                         if getattr(self.ai_p2, "ball", None) is not self._ball_main:
                             self.ai_p2.ball = self._ball_main  # type: ignore
-                        # obtener las teclas simuladas desde la IA
+                        # obtener teclas simuladas desde la IA
                         simulated_keys = self.ai_p2.get_simulated_keys()
                         # mover jugador 2 usando las teclas simuladas
                         self.jugador2.mover(simulated_keys)
@@ -619,52 +686,52 @@ class Game:
             btn.hovered = btn.rect.collidepoint(mouse_pos)
             self._draw_button(self.PANTALLA, btn, self.font_item)
 
-        # Hint (sin variables de entorno)
+        # Hint
         hint = self.font_small.render("↑/↓ mover  •  Enter seleccionar  •  Esc salir", True, BLANCO)
         self.PANTALLA.blit(hint, hint.get_rect(center=(ANCHO // 2, ALTO - 40)))
-
-
 
     def _draw_center_text(self, msg):
         surf = self.font_item.render(msg, True, BLANCO)
         self.PANTALLA.blit(surf, surf.get_rect(center=(ANCHO // 2, ALTO // 2)))
 
     # ---------------------------
-    # Opciones (ahora incluye Modo)
+    # Opciones (incluye Modo)
     # ---------------------------
     def _enter_options(self):
         if "ui_whoosh" in self.audio.sounds:
             self.audio.play_sound("ui_whoosh")
         self.audio.play_sound("ui_select")
         self.estado_juego = 'opciones'
+
+        # Snapshot para poder cancelar
+        self._opts_snapshot_mode = self.modo
+        self._opts_snapshot = {
+            "music": float(self.audio.group_vol["music"]),
+            "sfx":   float(self.audio.group_vol["sfx"]),
+            "ui":    float(self.audio.group_vol["ui"]),
+        }
+
+        # Valores locales editables (no tocan el mixer hasta APLICAR)
         self._opts_values = [
             self.modo,                              # índice 0: "1P"/"2P"
-            self.audio.group_vol["music"],          # 1
-            self.audio.group_vol["sfx"],            # 2
-            self.audio.group_vol["ui"],             # 3
+            self._opts_snapshot["music"],           # 1
+            self._opts_snapshot["sfx"],             # 2
+            self._opts_snapshot["ui"],              # 3
         ]
         self._opts_index = 0
+        self._dragging_bar = None
+
 
     def _handle_options_input(self, key) -> bool:
         if key in (pygame.K_ESCAPE,):
-            self.audio.play_sound("ui_back")
-            if "ui_whoosh" in self.audio.sounds:
-                self.audio.play_sound("ui_whoosh")
-            self.estado_juego = 'menu'
+            # Cancelar: restaurar snapshot y volver
+            self._cancel_options()
             return True
 
         if key in (pygame.K_RETURN, pygame.K_SPACE):
-            # Aplicar volúmenes
-            for i, g in enumerate(self._opts_groups):
-                if g:  # sólo grupos de audio (índice 0 es None)
-                    self.audio.set_group_volume(g, self._opts_values[i])
-            self._save_audio_config()
-            # Guardar modo
-            self._save_game_config()
-            self.audio.play_sound("ui_select")
-            if "ui_whoosh" in self.audio.sounds:
-                self.audio.play_sound("ui_whoosh")
-            self.estado_juego = 'menu'
+            # Aplicar cambios y volver
+            self._apply_options()
+            self._back_to_menu()
             return True
 
         if key in (pygame.K_UP, pygame.K_w):
@@ -678,41 +745,64 @@ class Game:
 
         idx = self._opts_index
         if idx == 0:
-            # Toggle de "Modo de juego"
+            # Toggle de "Modo de juego" (solo local)
             if key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
-                self._set_mode("2P" if self.modo == "1P" else "1P")
-                self._opts_values[0] = self.modo
+                self._opts_values[0] = "2P" if self._opts_values[0] == "1P" else "1P"
+                self.audio.play_sound("ui_move")
                 return True
         else:
-            # Sliders de audio
+            # Sliders de audio (solo local)
             if key in (pygame.K_LEFT, pygame.K_a):
                 self._opts_values[idx] = max(0.0, round(self._opts_values[idx] - 0.05, 2))
-                self.audio.set_group_volume(self._opts_groups[idx], self._opts_values[idx])
+                self.audio.play_sound("ui_move")
                 return True
             if key in (pygame.K_RIGHT, pygame.K_d):
                 self._opts_values[idx] = min(1.0, round(self._opts_values[idx] + 0.05, 2))
-                self.audio.set_group_volume(self._opts_groups[idx], self._opts_values[idx])
+                self.audio.play_sound("ui_move")
                 return True
 
         return False
 
+
     def _draw_options(self):
+        self.PANTALLA.fill(AZUL_OSCURO)
+
+        # Título
         title = self.font_title.render("Opciones", True, BLANCO)
         self.PANTALLA.blit(title, title.get_rect(center=(ANCHO // 2, 120)))
-        y0 = 220
-        for i, name in enumerate(self._opts_names):
-            sel = (i == self._opts_index)
-            label = f"> {name} <" if sel else f"  {name}  "
-            if i == 0:
-                line = f"{label} : {self.modo}  (←/→)"
-            else:
-                val = int(self._opts_values[i] * 100)
-                line = f"{label} : {val}%"
-            surf = self.font_item.render(line, True, BLANCO)
-            self.PANTALLA.blit(surf, surf.get_rect(center=(ANCHO // 2, y0 + i * 60)))
-        hint = "←/→ ajustar, ↑/↓ mover, Enter guardar, Esc cancelar"
-        hs = self.font_small.render(hint, True, BLANCO)
-        self.PANTALLA.blit(hs, hs.get_rect(center=(ANCHO // 2, y0 + 60 * len(self._opts_names) + 40)))
+
+        # Highlight de fila seleccionada
+        sel_rect = self._opt_row_rects[self._opts_index]
+        highlight = pygame.Surface((sel_rect.width, sel_rect.height), pygame.SRCALPHA)
+        highlight.fill((255, 255, 255, 26))  # leve
+        pygame.draw.rect(highlight, (200, 220, 255, 70), highlight.get_rect(), border_radius=12)
+        self.PANTALLA.blit(highlight, sel_rect.topleft)
+
+        # Línea de Modo
+        cx = ANCHO // 2
+        modo_txt = f"> Modo < : {self._opts_values[0]}  (←/→)"
+        color_modo = (255, 255, 255) if self._opts_index == 0 else (220, 225, 235)
+        txt = self.font_item.render(modo_txt, True, color_modo)
+        self.PANTALLA.blit(txt, txt.get_rect(center=(cx, 260)))
+
+        # Sliders (render con valores locales)
+        self._draw_slider(self.PANTALLA, self._opt_bars["music"], self._opts_values[1], "Música",
+                        selected=(self._opts_index == 1))
+        self._draw_slider(self.PANTALLA, self._opt_bars["sfx"],   self._opts_values[2], "SFX",
+                        selected=(self._opts_index == 2))
+        self._draw_slider(self.PANTALLA, self._opt_bars["ui"],    self._opts_values[3], "UI",
+                        selected=(self._opts_index == 3))
+
+        # Botones
+        mouse_pos = pygame.mouse.get_pos()
+        for btn in self._opt_buttons:
+            btn.hovered = btn.rect.collidepoint(mouse_pos)
+            self._draw_button(self.PANTALLA, btn, self.font_item)
+
+        # Hint minimalista
+        hs = self.font_small.render("←/→ ajustar  •  ↑/↓ mover", True, BLANCO)
+        self.PANTALLA.blit(hs, hs.get_rect(center=(ANCHO // 2, ALTO - 30)))
+
 
     # ---------------------------
     # Jingles / ESTADOS FINALES
@@ -783,11 +873,10 @@ class Game:
         if p in ("P1", "P2"):
             self.current_server = p
         else:
-            # Fallback por si la entrada es inválida
             print(f"[ERROR] Jugador inicial inválido: {player}. Usando '{self.current_server}'.")
 
     # ---------------------------
-    # Rally / PUNTUACIÓN donde empieza la pelota
+    # Rally / PUNTUACIÓN
     # ---------------------------
     def _start_new_rally(self):
         cx, cy = self.jugador1.x, self.jugador1.y
@@ -829,7 +918,7 @@ class Game:
     # REINTENTAR / VOLVER
     # ---------------------------
     def _reiniciar_partida(self):
-        # Música de juego (respetando mute)
+        # Música de juego (respeta mute)
         self._set_music_state("ingame")
 
         if self.score:
@@ -852,14 +941,13 @@ class Game:
         self.estado_juego = 'menu'
 
     # ---------------------------
-    # Punto 4: Autowin de debug → “321 reiniciando partida”
+    # Autowin de debug → “3,2,1” reiniciando partida
     # ---------------------------
     def _start_debug_restart_countdown(self, ms=3000):
         if not self._restart_cd:
             # Fallback sin módulo: reinicio directo
             self._reiniciar_partida()
             return
-        # Sin jingle ni cartel de victoria. Opcionalmente un whoosh suave.
         if "ui_whoosh" in self.audio.sounds:
             self.audio.play_sound("ui_whoosh")
         self._restart_block_input = True
@@ -879,7 +967,6 @@ class Game:
         if hasattr(player, "racket_rect"):
             pygame.draw.rect(surface, COLOR_RACKET, player.racket_rect, width=2)
 
-
     def _build_menu_buttons(self):
         cx, base_y, gap = ANCHO // 2, 260, 70
         items = [("Comenzar", "start"), ("Opciones", "options"), ("Salir", "quit")]
@@ -890,8 +977,103 @@ class Game:
             self._menu_buttons.append(UIButton(rect, label, action))
 
     def _draw_button(self, surface, btn: UIButton, font,
-                    fg=(255,255,255), bg=(25,38,60), bg_hover=(40,60,90)):
+                     fg=(255, 255, 255), bg=(25, 38, 60), bg_hover=(40, 60, 90)):
         pygame.draw.rect(surface, bg_hover if btn.hovered else bg, btn.rect, border_radius=12)
         text = font.render(btn.label, True, fg)
         surface.blit(text, text.get_rect(center=btn.rect.center))
-        pygame.draw.rect(surface, (255,255,255), btn.rect, width=1, border_radius=12)
+        pygame.draw.rect(surface, (255, 255, 255), btn.rect, width=1, border_radius=12)
+
+    def _build_options_ui(self):
+        """Define geometría de botones, barras y filas para Opciones."""
+        # Botones inferiores
+        self._opt_buttons.clear()
+        btn_w, btn_h = 180, 48
+        y = ALTO - 90
+        self._opt_buttons.append(
+            UIButton(pygame.Rect(ANCHO//2 - 220, y, btn_w, btn_h), "APLICAR", "opts_apply")
+        )
+        self._opt_buttons.append(
+            UIButton(pygame.Rect(ANCHO//2 + 40,  y, btn_w, btn_h), "VOLVER",  "opts_back")
+        )
+
+        # Centro base
+        cx = ANCHO // 2
+        bar_w, bar_h = 360, 10
+        y0   = 260
+        gap  = 70
+
+        # Filas (rects más grandes para highlight de selección)
+        row_w, row_h = 640, 56
+        self._opt_row_rects = [
+            pygame.Rect(cx - row_w//2, y0 - row_h//2, row_w, row_h),           # Modo
+            pygame.Rect(cx - row_w//2 - 60,  y0 + 1*gap - row_h//2,   row_w + 120,  row_h + 4),   # Música
+            pygame.Rect(cx - row_w//2, y0 + 2*gap - row_h//2, row_w, row_h),   # SFX
+            pygame.Rect(cx - row_w//2, y0 + 3*gap - row_h//2, row_w, row_h),   # UI
+        ]
+
+        # Barras (sliders) centradas
+        self._opt_bars = {
+            "music": pygame.Rect(cx - bar_w//2, y0 + 1*gap, bar_w, bar_h),
+            "sfx":   pygame.Rect(cx - bar_w//2, y0 + 2*gap, bar_w, bar_h),
+            "ui":    pygame.Rect(cx - bar_w//2, y0 + 3*gap, bar_w, bar_h),
+        }
+
+    def _draw_slider(self, surface, rect: pygame.Rect, value: float, label: str, selected: bool = False):
+        # Etiqueta
+        lbl_color = (255, 255, 255) if selected else (230, 235, 245)
+        lbl = self.font_item.render(label, True, lbl_color)
+        surface.blit(lbl, lbl.get_rect(midright=(rect.left - 20, rect.centery)))
+
+        # Track
+        pygame.draw.rect(surface, (90, 95, 110), rect, border_radius=6)
+
+        # Relleno
+        fill_w = int(rect.width * max(0.0, min(1.0, value)))
+        if fill_w > 0:
+            fill_rect = rect.copy()
+            fill_rect.width = fill_w
+            pygame.draw.rect(surface, (160, 190, 255), fill_rect, border_radius=6)
+
+        # Handle
+        hx = rect.left + fill_w
+        pygame.draw.circle(surface, (230, 240, 255), (hx, rect.centery), 10)
+        pygame.draw.circle(surface, (30, 40, 60), (hx, rect.centery), 10, width=2)
+
+        # Porcentaje
+        pct = self.font_small.render(f"{int(value*100)}%", True, (255, 255, 255))
+        surface.blit(pct, pct.get_rect(midleft=(rect.right + 16, rect.centery)))
+
+
+    def _apply_options(self):
+        # Persistir volúmenes desde valores locales
+        self.audio.set_group_volume("music", self._opts_values[1])
+        self.audio.set_group_volume("sfx",   self._opts_values[2])
+        self.audio.set_group_volume("ui",    self._opts_values[3])
+        self._save_audio_config()
+
+        # Guardar modo
+        if self._opts_values[0] != self.modo:
+            self._set_mode(self._opts_values[0])
+        self._save_game_config()
+
+        self.audio.play_sound("ui_select")
+
+    def _cancel_options(self):
+        # Restaurar snapshot y volver al menú
+        self.modo = self._opts_snapshot_mode
+        self._apply_mode()
+
+        for g, v in self._opts_snapshot.items():
+            self.audio.set_group_volume(g, v)
+
+        if "ui_whoosh" in self.audio.sounds:
+            self.audio.play_sound("ui_whoosh")
+        self.audio.play_sound("ui_back")
+        self.estado_juego = 'menu'
+
+
+    def _back_to_menu(self):
+        if "ui_whoosh" in self.audio.sounds:
+            self.audio.play_sound("ui_whoosh")
+        self.audio.play_sound("ui_back")
+        self.estado_juego = 'menu'
