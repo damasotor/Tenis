@@ -1,3 +1,5 @@
+import pygame
+
 # Coloca esta clase en un archivo 'engine/score.py' y asegúrate de importarla
 # O, si no tienes un archivo separado, colócala en 'engine/game.py'
 class ScoreManager:
