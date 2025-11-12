@@ -6,10 +6,12 @@ class ScoreManager:
     # La puntuación de tenis se mapea internamente a 0, 1, 2, 3 puntos.
     SCORES = {0: "0", 1: "15", 2: "30", 3: "40"}
     
+
     def __init__(self, player1_name="P1", player2_name="P2", screen=None):
         self.player1_name = player1_name
         self.player2_name = player2_name
         self.screen = screen
+
         self.reset_game()
         
     def reset_game(self):
@@ -36,6 +38,7 @@ class ScoreManager:
         p1 = self.p1_points
         p2 = self.p2_points
         winner = None  
+
         
         # Lógica de Deuce/Ventaja
         if p1 >= 3 and p2 >= 3:
@@ -50,6 +53,7 @@ class ScoreManager:
             self.game_winner = self.player1_name
         elif p2 >= 4:
             self.game_winner = self.player2_name
+
             
         if winner:
             self.game_winner = winner
@@ -75,6 +79,7 @@ class ScoreManager:
         pygame.display.flip()
         pygame.time.delay(2000)  # Esperar 2 segundos antes de continuar
 
+
     def get_score_str(self) -> str:
         """Devuelve la puntuación actual en formato de texto (ej: "15-30" o "Advantage P1")."""
         if self.game_winner:
@@ -97,6 +102,7 @@ class ScoreManager:
         score2 = self.SCORES.get(p2, "40+")
         
         return f"{score1}-{score2}"
+
         
     def draw_hud(self, screen, font):
         """Dibuja la puntuación actual en pantalla."""
@@ -107,4 +113,5 @@ class ScoreManager:
         surf = font.render(score_text, True, color)
         rect = surf.get_rect(center=(screen.get_width() // 2, 40))
         screen.blit(surf, rect)
+
 
