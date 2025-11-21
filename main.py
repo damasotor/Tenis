@@ -7,6 +7,9 @@ if __name__ == "__main__":
     # Fijar el directorio de trabajo al del archivo (rutas relativas estables)
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+    # Inicializar mixer ANTES de pygame.init()
+    pygame.mixer.pre_init(44100, -16, 2, 512)
+
     # Inicializar Pygame (audio y video)
     pygame.init()
     
