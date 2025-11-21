@@ -30,25 +30,25 @@ class AudioManager:
 
         # name -> (Sound, group, base_volume)
         self.sounds = {}
-        # base_name -> [variant_names] (incluye el base)
+        # base_name -> [variant_names]
         self.variants = {}
-        # name -> ms (tiempo mínimo entre reproducciones del mismo name)
+        # name -> cooldown ms
         self.cooldowns = {}
         # name -> last_ticks
         self.last_played = {}
 
         self.music_path = None
-        self._duck_prev = None  # guarda el volumen previo de música durante duck
+        self._duck_prev = None
 
         # Volúmenes por grupo (0..1)
         self.group_vol = {
             "ui":    0.70,
             "sfx":   0.85,
-            "amb":   0.25,  # si usás ambiente como música, ajustarás con play_music
+            "amb":   0.25,
             "music": 0.40,
         }
 
-        # --- Estado de mute global ---
+        # Estado mute global
         self._muted_all = False
         self._saved_group_vols = {}
 
@@ -56,11 +56,6 @@ class AudioManager:
     # Carga
     # ---------------------------
     def load_sound(self, name, path, volume=0.8, group="sfx", cooldown_ms=0):
-        """
-        Carga un sonido. Firma compatible con tu versión anterior:
-        load_sound(name, path, volume=0.8)
-        (ahora opcionalmente podés indicar group y cooldown_ms)
-        """
         if not self.enabled:
             return
         try:
@@ -73,10 +68,6 @@ class AudioManager:
             print(f"[Audio] Error cargando '{name}' desde '{path}': {e}")
 
     def register_variants(self, base_name, *names):
-        """
-        Registra variantes para que al pedir 'base_name' elija una al azar.
-        Ej: register_variants('hit_racket', 'hit_racket2', 'hit_racket3')
-        """
         self.variants[base_name] = [base_name] + [n for n in names if n in self.sounds]
 
     def load_music(self, path):
@@ -84,35 +75,24 @@ class AudioManager:
             return
         self.music_path = path
 
-    # Conveniencia: cargar SFX de la red (cinta/cuerpo)
+    # ---------------------------
+    # SFX propios de la red
+    # ---------------------------
     def load_net_sfx(self,
                      tape_path="assets/audio/net_tape.wav",
                      body_path="assets/audio/net_body.wav"):
-        """
-        Carga los SFX de la red:
-          - net_tape  → golpe en la cinta (brillante, corto)
-          - net_body  → golpe en el cuerpo (grave, amortiguado)
-        """
-        # Volúmenes recomendados y cooldown para evitar spam en rebotes múltiples
-        self.load_sound("net_tape", tape_path, volume=0.80, group="sfx", cooldown_ms=70)
-        self.load_sound("net_body", body_path, volume=0.90, group="sfx", cooldown_ms=70)
+        self.load_sound("net_tape", tape_path, 0.80, group="sfx", cooldown_ms=70)
+        self.load_sound("net_body", body_path, 0.90, group="sfx", cooldown_ms=70)
 
     # ---------------------------
     # Música
     # ---------------------------
     def play_music(self, loops=-1, volume=None):
-        """
-        Reproduce música con el volumen indicado o, si volume es None,
-        usa el volumen del grupo 'music'.
-        """
         if not (self.enabled and self.music_path):
             return
         try:
             pygame.mixer.music.load(self.music_path)
-            if volume is None:
-                vol = self.group_vol["music"]
-            else:
-                vol = max(0.0, min(1.0, float(volume)))
+            vol = self.group_vol["music"] if volume is None else max(0.0, min(1.0, float(volume)))
             pygame.mixer.music.set_volume(vol)
             pygame.mixer.music.play(loops)
         except pygame.error as e:
@@ -128,11 +108,12 @@ class AudioManager:
             return
         pygame.mixer.music.fadeout(int(ms))
 
-    # Ducking: baja temporalmente la música a un valor absoluto
+    # ---------------------------
+    # Ducking
+    # ---------------------------
     def duck_music(self, down_to=0.15):
         if not self.enabled:
             return
-        # guarda el volumen previo (solo la primera vez hasta unduck)
         if self._duck_prev is None:
             self._duck_prev = pygame.mixer.music.get_volume()
         pygame.mixer.music.set_volume(max(0.0, min(1.0, float(down_to))))
@@ -140,7 +121,6 @@ class AudioManager:
     def unduck_music(self):
         if not self.enabled:
             return
-        # restaura el volumen previo si lo teníamos, si no usa el del grupo
         if self._duck_prev is not None:
             pygame.mixer.music.set_volume(self._duck_prev)
             self._duck_prev = None
@@ -148,10 +128,6 @@ class AudioManager:
             pygame.mixer.music.set_volume(self.group_vol.get("music", 0.4))
 
     def set_group_volume(self, group, volume):
-        """
-        Ajusta el volumen de un grupo (0..1).
-        Para 'music' aplica inmediatamente.
-        """
         v = max(0.0, min(1.0, float(volume)))
         self.group_vol[group] = v
         if group == "music":
@@ -161,21 +137,16 @@ class AudioManager:
     # Mute global
     # ---------------------------
     def mute_all(self):
-        """Silencia todos los grupos (ui/sfx/amb/music) guardando volúmenes previos."""
         if not self.enabled or self._muted_all:
             return
-        # Guardar mezcla actual
         self._saved_group_vols = dict(self.group_vol)
-        # Llevar todo a 0 (incluye música)
         for g in list(self.group_vol.keys()):
             self.set_group_volume(g, 0.0)
         self._muted_all = True
 
     def unmute_all(self):
-        """Restaura los volúmenes guardados con mute_all()."""
         if not self.enabled or not self._muted_all:
             return
-        # Restaurar mezcla anterior
         if self._saved_group_vols:
             for g, v in self._saved_group_vols.items():
                 self.set_group_volume(g, v)
@@ -183,7 +154,6 @@ class AudioManager:
         self._muted_all = False
 
     def toggle_mute_all(self):
-        """Atajo para alternar mute global."""
         if self._muted_all:
             self.unmute_all()
         else:
@@ -198,7 +168,6 @@ class AudioManager:
     def _pick_variant(self, name):
         vs = self.variants.get(name)
         if vs:
-            # filtrar por si alguna variante se removió
             vs = [n for n in vs if n in self.sounds]
             if vs:
                 return random.choice(vs)
@@ -216,9 +185,6 @@ class AudioManager:
         self.last_played[name] = pygame.time.get_ticks()
 
     def _effective_vol(self, group, base_volume):
-        """
-        Volumen efectivo = volumen base del sample * volumen del grupo.
-        """
         g = self.group_vol.get(group, 1.0)
         return max(0.0, min(1.0, float(base_volume) * g))
 
@@ -226,35 +192,39 @@ class AudioManager:
         """Reproduce un SFX (usa variantes y cooldown si están configurados)."""
         if not self.enabled or self._muted_all:
             return
+
         key = self._pick_variant(name)
         if not self._can_play(key):
             return
+
         pak = self.sounds.get(key)
         if not pak:
             return
+
         snd, group, base_vol = pak
-        # Si el grupo está en 0, evitamos buscar canal innecesariamente
-        if self._effective_vol(group, base_vol) <= 0.0:
+        vol = self._effective_vol(group, base_vol)
+        if vol <= 0.0:
             return
+
         ch = pygame.mixer.find_channel()
         if ch:
-            ch.set_volume(self._effective_vol(group, base_vol))
+            ch.set_volume(vol)
             ch.play(snd, loops=loops)
             self._mark_played(key)
 
     def play_sound_panned(self, name, pan=0.0):
-        """
-        Reproduce un SFX con paneo estéreo:
-        pan = -1.0 (izq) ... 0 (centro) ... +1.0 (der)
-        """
+        """Reproduce un SFX con paneo estéreo (-1 izq, +1 der)."""
         if not self.enabled or self._muted_all:
             return
+
         key = self._pick_variant(name)
         if not self._can_play(key):
             return
+
         pak = self.sounds.get(key)
         if not pak:
             return
+
         snd, group, base_vol = pak
         vol = self._effective_vol(group, base_vol)
         if vol <= 0.0:
@@ -265,9 +235,9 @@ class AudioManager:
             return
 
         pan = max(-1.0, min(1.0, float(pan)))
-        # Distribución simple en L/R
-        left = vol * (1.0 - max(0.0, pan))    # si pan > 0 reduce L
-        right = vol * (1.0 - max(0.0, -pan))  # si pan < 0 reduce R
+        left = vol * (1.0 - max(0.0, pan))
+        right = vol * (1.0 - max(0.0, -pan))
+
         ch.set_volume(left, right)
         ch.play(snd)
         self._mark_played(key)
